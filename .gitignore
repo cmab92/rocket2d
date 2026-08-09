@@ -18,7 +18,7 @@ venv/
 htmlcov/
 
 # Data & credentials
-data/
+/data/
 kaggle.json
 *.kaggle/
 
