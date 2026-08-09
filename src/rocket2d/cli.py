@@ -17,7 +17,7 @@ import sys
 from collections import Counter
 
 from rocket2d.config import Config
-from rocket2d.data.datasets import get_images
+from rocket2d.data.datasets import ImageDataset
 from rocket2d.data.kaggle import download_and_prepare_datasets, print_directory_tree
 from rocket2d.training import run_cnn, run_rocket
 from rocket2d.visualization import grayscale_histogram, image_size_stats, show_samples
@@ -83,9 +83,12 @@ def _cmd_inspect(config: Config, dataset: str, show: bool) -> None:
     print(f"DATASET: {dataset}")
     print("=" * 50)
 
-    images, labels = get_images(path)
+    ds = ImageDataset(path, dataset=dataset)
+    idx_to_class = {idx: name for name, idx in ds.class_to_idx.items()}
+    images = [sample_path for sample_path, _, _ in ds.samples]
+    labels = [idx_to_class[label_idx] for _, label_idx, _ in ds.samples]
     print(f"Total images: {len(images)}")
-    print(f"Number of classes: {len(set(labels))}")
+    print(f"Number of classes: {len(ds.class_to_idx)}")
 
     print("\nClass distribution (top 10):")
     for label, count in Counter(labels).most_common(10):
