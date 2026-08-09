@@ -37,3 +37,16 @@ def test_rocket_classifier_predict_before_fit_raises():
     X = np.zeros((2, 8, 8), dtype=np.float32)
     with pytest.raises(RuntimeError):
         model.predict(X)
+
+
+def test_rocket_classifier_rejects_images_smaller_than_kernel_span():
+    import pytest
+
+    # Default k_choices go up to 9 with dilation up to 2 -> needs >= 17px per side.
+    rng = np.random.default_rng(0)
+    X = rng.random((10, 8, 8), dtype=np.float32)
+    y = (np.arange(10) % 2).astype(np.int64)
+
+    model = RocketClassifier(n_kernels=10, seed=0)
+    with pytest.raises(ValueError, match="too small"):
+        model.fit(X, y)

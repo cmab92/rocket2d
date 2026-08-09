@@ -104,7 +104,9 @@ def create_data_loaders(
     generator = torch.Generator()
     generator.manual_seed(seed)
 
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, generator=generator)
+    train_loader = DataLoader(
+        train_dataset, batch_size=batch_size, shuffle=True, generator=generator
+    )
     test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 
     logger.info("Train batches: %d, test batches: %d", len(train_loader), len(test_loader))

@@ -88,17 +88,20 @@ class ImageDataset:
             raise ValueError(f"Unknown dataset: {self.dataset}") from None
         return loader()
 
-    def _load_split_classes(
-        self, splits: list[str], class_to_idx: dict[str, int] | None = None
-    ) -> list[tuple[str, int, str]]:
-        """Walk ``root/<split>/<class>/*`` for each split and collect labeled samples."""
+    def _load_split_classes(self, splits: list[str]) -> list[tuple[str, int, str]]:
+        """Walk ``root/<split>/<class>/*`` for each split and collect labeled samples.
+
+        Class directories not present in ``self.class_to_idx`` are skipped rather
+        than raising, so an unexpected extra class in one split (a common quirk of
+        real-world dataset drops) doesn't crash loading.
+        """
         samples: list[tuple[str, int, str]] = []
         for split in splits:
             split_path = self.root / split
             if not split_path.exists():
                 continue
             for class_dir in sorted(p for p in split_path.iterdir() if p.is_dir()):
-                if class_to_idx is not None and class_dir.name not in class_to_idx:
+                if class_dir.name not in self.class_to_idx:
                     continue
                 label = self.class_to_idx[class_dir.name]
                 for file_path in class_dir.iterdir():
@@ -116,7 +119,7 @@ class ImageDataset:
     def _load_xray(self) -> list[tuple[str, int, str]]:
         """Load Chest X-Ray Pneumonia dataset image paths, labels, and splits."""
         self.class_to_idx = {"NORMAL": 0, "PNEUMONIA": 1}
-        return self._load_split_classes(["train", "val", "test"], self.class_to_idx)
+        return self._load_split_classes(["train", "val", "test"])
 
     def _load_dtd(self) -> list[tuple[str, int, str]]:
         """Load Describable Textures Dataset (DTD) image paths and labels."""

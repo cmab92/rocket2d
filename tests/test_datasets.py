@@ -44,3 +44,20 @@ def test_unknown_dataset_raises(tmp_path):
 
     with pytest.raises(ValueError):
         ImageDataset(root=tmp_path, dataset="not-a-dataset")
+
+
+def test_image_dataset_skips_unknown_class_in_split(neu_dataset_dir):
+    # A class present only in "validation" (not in "train") must be skipped,
+    # not crash the loader with a KeyError.
+    import numpy as np
+    from PIL import Image
+
+    extra_dir = neu_dataset_dir / "validation" / "unseen_class"
+    extra_dir.mkdir()
+    arr = np.zeros((16, 16), dtype=np.uint8)
+    Image.fromarray(arr, mode="L").save(extra_dir / "img_0.png")
+
+    ds = ImageDataset(root=neu_dataset_dir, dataset="neu", size=16, grayscale=True)
+    assert "unseen_class" not in ds.class_to_idx
+    X, y = ds.prepare()
+    assert X.shape[0] == 24  # unseen_class images are excluded, not counted

@@ -206,9 +206,26 @@ class RocketClassifier:
         -------
         RocketClassifier
             self
+
+        Raises
+        ------
+        ValueError
+            If the image height/width is smaller than the largest configured
+            kernel/dilation combination can be applied to without padding.
         """
         if X.ndim == 3:
             X = X[:, None, :, :]
+
+        max_span = max((k - 1) * d + 1 for k in self.k_choices for d in self.d_choices)
+        min_side = min(X.shape[2], X.shape[3])
+        if max_span > min_side:
+            raise ValueError(
+                f"Image size ({X.shape[2]}x{X.shape[3]}) is too small for the configured "
+                f"kernel/dilation choices: the largest combination (k={self.k_choices}, "
+                f"d={self.d_choices}) needs at least {max_span}px per side. Increase the "
+                f"image size or reduce k_choices/d_choices."
+            )
+
         self.kernels_by_group = self.make_random_kernels_2d(
             self.n_kernels, X.shape[1], self.k_choices, self.d_choices, seed=self.seed
         )
