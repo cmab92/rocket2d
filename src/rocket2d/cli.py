@@ -56,6 +56,9 @@ def _build_parser() -> argparse.ArgumentParser:
     rocket_p.add_argument("dataset", choices=DATASETS)
     rocket_p.add_argument("--image-size", type=int, default=128)
     rocket_p.add_argument("--n-kernels", type=int, default=5000)
+    rocket_p.add_argument(
+        "--device", default=None, help="Defaults to CUDA if available, else CPU."
+    )
     rocket_p.add_argument("--no-show", action="store_true")
 
     all_p = train_sub.add_parser("all", help="Run CNN and ROCKET on every dataset.")
@@ -133,6 +136,7 @@ def main(argv: list[str] | None = None) -> int:
                 img_size=args.image_size,
                 seed=config.seed,
                 n_kernels=args.n_kernels,
+                device=args.device or config.device,
                 show_plots=not args.no_show,
             )
         elif args.model == "all":
@@ -157,6 +161,7 @@ def main(argv: list[str] | None = None) -> int:
                     img_size=args.image_size,
                     seed=config.seed,
                     n_kernels=args.n_kernels,
+                    device=device,
                     show_plots=not args.no_show,
                 )
     return 0

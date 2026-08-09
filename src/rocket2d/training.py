@@ -136,6 +136,7 @@ def run_rocket(
     img_size: int = 128,
     seed: int = 42,
     n_kernels: int = 5000,
+    device: str | None = None,
     show_plots: bool = True,
 ) -> dict[str, float]:
     """Train and evaluate a :class:`RocketClassifier` pipeline on a given dataset.
@@ -152,6 +153,8 @@ def run_rocket(
         Random seed (default 42).
     n_kernels : int, optional
         Number of random ROCKET kernels (default 5000).
+    device : str, optional
+        Torch device for feature extraction (default: CUDA if available, else CPU).
     show_plots : bool, optional
         Whether to display matplotlib figures interactively (default True).
 
@@ -165,7 +168,7 @@ def run_rocket(
     X, y = dataset.prepare()
     X_tr, X_te, y_tr, y_te = train_test_split(X, y, test_size=0.2, random_state=seed, stratify=y)
 
-    model = RocketClassifier(n_kernels=n_kernels, seed=seed)
+    model = RocketClassifier(n_kernels=n_kernels, seed=seed, device=device)
     model.fit(X_tr, y_tr)
     y_pred = model.predict(X_te)
 
