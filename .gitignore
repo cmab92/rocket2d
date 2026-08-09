@@ -24,6 +24,7 @@ kaggle.json
 
 # Model artifacts / outputs
 outputs/
+results/
 *.pt
 *.pth
 

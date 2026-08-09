@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 
 import numpy as np
 import torch
@@ -27,6 +28,7 @@ def run_cnn(
     seed: int = 42,
     device: str = "cpu",
     show_plots: bool = True,
+    save_dir: str | None = None,
 ) -> dict[str, float]:
     """Train and evaluate :class:`SimpleCNN` on a given image dataset.
 
@@ -48,6 +50,9 @@ def run_cnn(
         Torch device string (default "cpu").
     show_plots : bool, optional
         Whether to display matplotlib figures interactively (default True).
+    save_dir : str, optional
+        If given, save generated plots (confusion matrix, ROC/PR, misclassified
+        examples, learning curve) to this directory.
 
     Returns
     -------
@@ -109,6 +114,9 @@ def run_cnn(
     else:
         target_names = list(dataset.class_to_idx.keys())
 
+    if save_dir:
+        Path(save_dir).mkdir(parents=True, exist_ok=True)
+
     metrics = evaluate_metrics(
         y_true=all_labels,
         y_pred=all_preds,
@@ -119,12 +127,14 @@ def run_cnn(
         show_misclassified=True,
         max_misclassified=5,
         show=show_plots,
+        save_dir=save_dir,
     )
     plot_learning_curves(
         train_losses,
         y_label="Training Loss",
         title=f"{dataset_name.upper()} CNN Learning Curve",
         show=show_plots,
+        save_path=f"{save_dir}/learning_curve.png" if save_dir else None,
     )
     print("-" * 60)
     return metrics
@@ -138,6 +148,7 @@ def run_rocket(
     n_kernels: int = 5000,
     device: str | None = None,
     show_plots: bool = True,
+    save_dir: str | None = None,
 ) -> dict[str, float]:
     """Train and evaluate a :class:`RocketClassifier` pipeline on a given dataset.
 
@@ -157,6 +168,9 @@ def run_rocket(
         Torch device for feature extraction (default: CUDA if available, else CPU).
     show_plots : bool, optional
         Whether to display matplotlib figures interactively (default True).
+    save_dir : str, optional
+        If given, save generated plots (confusion matrix, ROC/PR, misclassified
+        examples) to this directory.
 
     Returns
     -------
@@ -172,6 +186,9 @@ def run_rocket(
     model.fit(X_tr, y_tr)
     y_pred = model.predict(X_te)
 
+    if save_dir:
+        Path(save_dir).mkdir(parents=True, exist_ok=True)
+
     print(f"\n--- ROCKET Evaluation for {dataset_name.upper()} ---")
     metrics = evaluate_metrics(
         y_true=y_te,
@@ -183,6 +200,7 @@ def run_rocket(
         show_misclassified=True,
         max_misclassified=5,
         show=show_plots,
+        save_dir=save_dir,
     )
     print("-" * 60)
     return metrics

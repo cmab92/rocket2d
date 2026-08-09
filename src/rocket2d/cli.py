@@ -51,6 +51,7 @@ def _build_parser() -> argparse.ArgumentParser:
     cnn_p.add_argument("--epochs", type=int, default=10)
     cnn_p.add_argument("--device", default=None, help="Defaults to CUDA if available, else CPU.")
     cnn_p.add_argument("--no-show", action="store_true")
+    cnn_p.add_argument("--save-dir", default=None, help="Directory to save result plots to.")
 
     rocket_p = train_sub.add_parser("rocket", help="Train the ROCKET + RidgeClassifier pipeline.")
     rocket_p.add_argument("dataset", choices=DATASETS)
@@ -60,6 +61,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "--device", default=None, help="Defaults to CUDA if available, else CPU."
     )
     rocket_p.add_argument("--no-show", action="store_true")
+    rocket_p.add_argument("--save-dir", default=None, help="Directory to save result plots to.")
 
     all_p = train_sub.add_parser("all", help="Run CNN and ROCKET on every dataset.")
     all_p.add_argument("--image-size", type=int, default=128)
@@ -68,6 +70,7 @@ def _build_parser() -> argparse.ArgumentParser:
     all_p.add_argument("--n-kernels", type=int, default=5000)
     all_p.add_argument("--device", default=None)
     all_p.add_argument("--no-show", action="store_true")
+    all_p.add_argument("--save-dir", default=None, help="Directory to save result plots to.")
 
     return parser
 
@@ -131,6 +134,7 @@ def main(argv: list[str] | None = None) -> int:
                 seed=config.seed,
                 device=args.device or config.device,
                 show_plots=not args.no_show,
+                save_dir=args.save_dir,
             )
         elif args.model == "rocket":
             run_rocket(
@@ -141,6 +145,7 @@ def main(argv: list[str] | None = None) -> int:
                 n_kernels=args.n_kernels,
                 device=args.device or config.device,
                 show_plots=not args.no_show,
+                save_dir=args.save_dir,
             )
         elif args.model == "all":
             device = args.device or config.device
@@ -155,6 +160,7 @@ def main(argv: list[str] | None = None) -> int:
                     seed=config.seed,
                     device=device,
                     show_plots=not args.no_show,
+                    save_dir=f"{args.save_dir}/cnn/{name}" if args.save_dir else None,
                 )
             for name in DATASETS:
                 print(f"\n{'=' * 30}\nRUN ROCKET: {name.upper()}\n{'=' * 30}")
@@ -166,6 +172,7 @@ def main(argv: list[str] | None = None) -> int:
                     n_kernels=args.n_kernels,
                     device=device,
                     show_plots=not args.no_show,
+                    save_dir=f"{args.save_dir}/rocket/{name}" if args.save_dir else None,
                 )
     return 0
 
