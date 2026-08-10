@@ -1,0 +1,198 @@
+%%
+%% Copyright 2019-2024 Elsevier Ltd
+%%
+%% This file is part of the 'CAS Bundle'.
+%% --------------------------------------
+%%
+%% It may be distributed under the conditions of the LaTeX Project Public
+%% License, either version 1.3c of this license or (at your option) any
+%% later version.  The latest version of this license is in
+%%    http://www.latex-project.org/lppl.txt
+%% and version 1.3c or later is part of all distributions of LaTeX
+%% version 1999/12/01 or later.
+%%
+%% The list of all files belonging to the 'CAS Bundle' is
+%% given in the file `manifest.txt'.
+%%
+%% Template article for cas-sc documentclass for
+%% double column output.
+
+\documentclass[a4paper,fleqn]{cas-sc}
+
+% If the frontmatter runs over more than one page
+% use the longmktitle option.
+
+%\documentclass[a4paper,fleqn,longmktitle]{cas-sc}
+
+\usepackage[authoryear,longnamesfirst]{natbib}
+\usepackage{booktabs}
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+
+\begin{document}
+\let\WriteBookmarks\relax
+\def\floatpagepagefraction{1}
+\def\textpagefraction{.001}
+\shorttitle{On Image Classification with Random Convolutional Kernels}
+\shortauthors{Lock and Bonenberger}
+
+% Main title of the paper
+\title[mode=title]{2D Image Classification with Random Convolutional Kernels: A ROCKET-Based Approach}
+
+% First author
+\author[1]{Felicitas Lock}
+\cormark[1]
+\credit{Conceptualization, Methodology, Software, Investigation, Writing -- original draft}
+
+\affiliation[1]{organization={Faculty of Electrical Engineering and Computer Science, Ravensburg-Weingarten University of Applied Sciences},
+                city={Weingarten},
+                country={Germany}}
+
+% Second author
+\author[1]{Christopher Bonenberger}
+\credit{Supervision, Writing -- review \& editing}
+
+% Corresponding author text
+\cortext[1]{Corresponding author}
+
+% Here goes the abstract
+\begin{abstract}
+Deep learning achieves strong performance in image classification but often requires costly training and substantial computational resources. This paper explores a lightweight alternative by adapting the ROCKET framework from time-series classification to two-dimensional image data. The proposed 2D-ROCKET approach applies large banks of random 2D convolutional kernels and summarizes their responses using simple aggregation statistics, enabling efficient feature extraction without learned filters and, structurally, without the stacked, hierarchical multi-scale composition that gives deep CNNs their representational power. MNIST and CIFAR-10 are used here not as target applications but as controlled, well-understood benchmarks to probe the method's ceiling: preserving spatial structure with 2D kernels improves performance compared to flattened 1D variants, and a final configuration (5,000 mixed-scale kernels, moderate dilation, valid padding) reaches 99.41\% accuracy on MNIST and 73.43\% on CIFAR-10, slightly ahead of a deliberately shallow, two-layer CNN baseline on both benchmarks and far ahead of a linear SVM, at a fraction of the SVM's training time. This should not be read as evidence that 2D-ROCKET rivals deep CNNs in general: the shallow baseline itself has little of the multi-scale hierarchical depth that distinguishes modern, deeper architectures, which were out of scope for this comparison. Object recognition on natural images is, in any case, not the domain 2D-ROCKET is proposed for: a proof-of-concept on the texture-dominated KTH-TIPS dataset (94.7\% accuracy, versus 43.5\%/52.4\% for SVM/CNN) indicates that the method's real niche is texture-like, repetitive-pattern imagery -- material and surface textures, inspection data, or structured surface signals -- where classification does not depend on the multi-scale, compositional object structure that only deep, hierarchical architectures can capture. Overall, 2D-ROCKET provides a simple, training-efficient, and interpretable baseline, and highlights random convolutional feature extraction as a promising direction for lightweight, texture-oriented image classification, rather than as a competitor to deep CNNs on general object recognition.
+\end{abstract}
+
+% Research highlights
+\begin{highlights}
+\item Adapts ROCKET's random-kernel, statistics-based paradigm from 1D time series to 2D images.
+\item Systematic ablations isolate the effect of feature statistics, 1D vs.\ 2D kernels, padding, preprocessing, and kernel budget.
+\item Final 2D-ROCKET reaches 99.41\% (MNIST) / 73.43\% (CIFAR-10) without any gradient-based training.
+\item Trains in seconds to minutes, versus hours for a linear SVM baseline, while beating it decisively in accuracy.
+\item Slightly beats a deliberately shallow CNN baseline, but as a flat, single-stage method it has no mechanism for the multi-scale composition of deeper CNNs; proposed instead for texture-dominated imagery, where a KTH-TIPS proof-of-concept reaches 94.7\%.
+\end{highlights}
+
+% Keywords
+\begin{keywords}
+ROCKET \sep random convolutional kernels \sep image classification \sep lightweight machine learning \sep feature extraction \sep texture classification
+\end{keywords}
+
+\maketitle
+
+\section{Introduction}\label{sec:intro}
+
+Image classification has become a central task in machine learning, with deep learning models achieving remarkable accuracy across a wide range of datasets. Classic machine learning algorithms, both on images and on time series, often require expensive feature-engineering steps, resulting in a demand for high computing effort and correspondingly powerful hardware \citep{ismailfawaz2019deep}. Moreover, these models often come with large memory requirements and limited interpretability. Exploring alternative approaches that are computationally efficient, lightweight, and conceptually simple is therefore of growing interest.
+
+RandOm Convolutional KErnel Transform (ROCKET) is a method originally developed for time-series classification that offers high efficiency through large banks of random convolutional kernels combined with simple aggregation features and a linear classifier \citep{dempster2020rocket}. Investigating whether this idea can be transferred to image data may yield insights into efficient, non-deep alternatives for image classification.
+
+The main objective of this work is to investigate whether ROCKET-style feature extraction can be effectively adapted to image classification. Concretely, we (i) design a ROCKET-inspired 2D feature-extraction pipeline for images using random convolutional kernels and simple aggregation statistics, (ii) analyze the impact of kernel size, dilation, kernel count, padding, and feature selection through controlled ablations, (iii) evaluate the resulting pipeline, termed 2D-ROCKET, on MNIST and CIFAR-10, and (iv) compare it against a minimal 1D-ROCKET baseline, a linear SVM, and a lightweight CNN.
+
+The scope is deliberately restricted: all convolutional kernels remain fixed after random initialization, hyperparameter search is limited to small predefined grids, and comparisons are made against lightweight rather than state-of-the-art baselines. The goal is not to outperform modern deep networks, but to isolate the effect of spatially structured random convolutions and quantify the resulting accuracy/cost trade-offs.
+
+A related but separate scoping point concerns the target application. MNIST and CIFAR-10 are used here because they are standard, well-characterized benchmarks that make the ablations reproducible and comparable to prior work -- not because natural-object recognition is where 2D-ROCKET is expected to be competitive. A deep CNN builds its representation through several stacked convolutional and pooling layers, composing local edges into increasingly abstract, multi-scale object parts; 2D-ROCKET, by construction, performs a single flat feature-extraction stage with no learned composition across layers (Sec.~\ref{sec:related}). The CNN baseline used for comparison in this paper is deliberately shallow (two convolutional layers, Sec.~\ref{sec:methods}) to keep model complexity comparable across baselines, and consequently makes only limited use of the deep, multi-scale hierarchy that distinguishes modern CNN architectures such as ResNets -- which, along with other deep or state-of-the-art models, are explicitly out of scope here. 2D-ROCKET should therefore not be expected to approach the accuracy of genuinely deep, multi-scale networks on datasets like CIFAR-10, where distinguishing object classes benefits from exactly this kind of hierarchical structure, even where it matches or slightly exceeds the shallow baseline tested here (Sec.~\ref{sec:results}). The method is instead proposed for texture-dominated or otherwise spatially repetitive image data -- surface, material, or inspection imagery -- where classification relies on local, statistically distinctive patterns rather than on composed object hierarchies, and where a flat random-feature bank can plausibly substitute for learned depth. CIFAR-10 is included primarily as a stress test against object-recognition structure that 2D-ROCKET cannot represent, while the texture-oriented case is examined directly in Sec.~\ref{sec:results} via a proof-of-concept on KTH-TIPS.
+
+This paper addresses three research questions: (i) how well does a ROCKET-style 2D feature-extraction approach perform on image classification compared to simple baselines, (ii) how do key design choices -- kernel size, dilation, kernel count, and selected aggregation features -- influence performance and computational cost, and (iii) what are the practical advantages, limitations, and application scenarios of the resulting 2D-ROCKET approach.
+
+\section{Related Work}\label{sec:related}
+
+\textbf{Classical and lightweight approaches.} Before the deep learning era, image classification commonly combined handcrafted feature descriptors with classical classifiers. Histogram of Oriented Gradients (HOG) summarizes gradient magnitude and direction in local cells \citep{dalal2005histograms}, while Local Binary Patterns (LBP) encode local texture via thresholded neighborhoods \citep{pietikainen2011local}. Both are typically paired with a Support Vector Machine (SVM) \citep{cortes1995support}, forming a well-understood, interpretable baseline. Lightweight convolutional networks, including shallow CNNs (SCNNs), bridge the gap between full deep networks and classical pipelines by using few convolutional layers and simple pooling while retaining learned, task-specific filters \citep{lei2019shallow}. CNNs remain the dominant approach for state-of-the-art image classification \citep{krichen2023cnn}, but their computational and memory cost motivates the search for lighter alternatives.
+
+\textbf{ROCKET and its variants.} ROCKET extracts features from time series using a large ensemble (typically $\geq$10{,}000) of randomly initialized, fixed convolutional kernels, summarized via the Proportion of Positive Values (PPV) and the maximum activation (Max), and classified with a linear Ridge classifier \citep{dempster2020rocket}. The reliance on a large number of independent random kernels can be linked to the Johnson--Lindenstrauss lemma, which suggests that sufficiently many random projections approximately preserve pairwise distances \citep{ghojogh2021johnson}. Follow-up work improved computational efficiency and determinism: MiniROCKET restricts kernel weights to two values and uses PPV only \citep{dempster2020minirocket}; MultiROCKET adds first-order differences and three further pooling statistics -- Mean Positive Value (MPV), Mean Index of Positive Values (MIPV), and Local Share of Positive Values (LSPV) \citep{tan2022multirocket}; Hydra introduces a dictionary-style kernel-competition mechanism \citep{dempster2022hydra}. This work adopts the MultiROCKET-style statistics (MPV, MIPV, LSPV) as candidate features for the 2D setting, since they are inexpensive and plausibly informative for spatially structured data.
+
+\textbf{Random convolutions on images.} The idea of random projections and random convolutional features for images predates ROCKET: Rahimi and Recht map inputs into a randomized low-dimensional feature space that approximates a kernel, enabling fast linear learning on non-linear problems \citep{rahimi2007random}. Random depthwise convolutional architectures combined with global pooling and a linear classifier have achieved competitive accuracy on CIFAR-10 and STL-10 \citep{xue2018random}, and random filters followed by pooling and a linear SVM have reached roughly 84\% accuracy on facial-expression classification without any filter learning \citep{ren2016facial}. Unlike these approaches, most of which retain a multi-layer, CNN-like architecture with stacked random convolutions, ROCKET performs a single, flat feature-extraction stage with simple statistical aggregation and no non-linear activations. To our knowledge, this flat ROCKET-style design has not been systematically adapted and ablated for 2D image data, which is the gap this work addresses.
+
+\section{Methods}\label{sec:methods}
+
+\subsection{1D-ROCKET baseline}
+As a reference and sanity check, a minimal, independent 1D-ROCKET implementation follows Dempster et al.\ closely \citep{dempster2020rocket}: images are flattened row-wise, kernels of length $l$ are convolved with the flattened sequence $x$ as
+\begin{equation}
+(x * k)[t] = \sum_{i=0}^{l-1} x[t+i]\cdot k[i],
+\end{equation}
+and each kernel yields two features,
+\begin{equation}
+f_{\text{max}} = \max_t (x*k)[t], \qquad
+f_{\text{PPV}} = \frac{1}{L-l+1}\sum_t \mathbb{1}\big((x*k)[t] > 0\big).
+\end{equation}
+Kernel sizes $k \in \{7,9,11\}$ and a per-kernel-group random choice between \emph{same} and \emph{valid} padding (deterministic given the seed) are used, followed by a Ridge classifier.
+
+\subsection{2D-ROCKET design}
+2D-ROCKET replaces the flattening step with genuine 2D convolutions, preserving spatial (and, for RGB inputs, channel) structure. Kernel weights are sampled with variance $2/\text{fan-in}$ (He-style initialization) and a small random bias $\mathcal{N}(0, 0.1)$; stride is fixed to 1 to preserve full spatial resolution, which matters for location-sensitive statistics.
+
+In addition to PPV and Max, three further statistics inspired by MultiROCKET \citep{tan2022multirocket} are evaluated: the Mean Positive Value (MPV, the average magnitude of positive activations), the Mean Index of Positive Values (MIPV, a first-order moment of the activation's spatial location, computed per axis as MIPV$_y$/MIPV$_x$), and the Local Share of Positive Values (LSPV, the proportion of positive responses within predefined local regions). Eight feature-set variants (F1: PPV+Max, through F8: all five statistics) are compared in an ablation (Sec.~\ref{sec:results}).
+
+Three padding strategies are compared: \emph{same} (kernel applied at every position, image-size output), \emph{valid} (kernel applied only where it fully fits, discarding kernel/dilation groups whose effective receptive field $(k-1)\cdot d + 1$ exceeds the image), and \emph{random} (a per-kernel-group, seed-deterministic mix of the two).
+
+Two normalization stages operate at different levels and are complementary: (i) dataset-level normalization (fixed per-dataset mean/std, applied by the loader) and (ii) an optional per-image, per-channel z-score standardization $x' = (x-\mu)/\max(\sigma,\varepsilon)$ with $\varepsilon=10^{-6}$, applied immediately before convolution to make kernel responses scale-invariant. Extracted features are additionally standardized (zero mean, unit variance, fit on the training split) before being passed to a \texttt{RidgeClassifier}; the regularization strength $\alpha$ is selected from a grid $\{1000,1200,\dots,2400\}$ per experiment.
+
+\subsection{Baselines}
+A \emph{linear SVM} is trained on flattened, standardized pixels (with a random projection to 2048 dimensions for CIFAR-10 to keep training tractable), $C=0.1$, \texttt{max\_iter}=20{,}000. A \emph{lightweight CNN} consists of two convolutional layers (32 and 64 channels, ReLU, max-pooling) followed by a small MLP (128 hidden units), trained for 10 epochs with Adam ($\text{lr}=10^{-3}$) and cross-entropy loss, without data augmentation or batch normalization.
+
+\section{Experimental Setup}\label{sec:setup}
+
+\textbf{Datasets.} MNIST (60,000/10,000 train/test, $28\times28$ grayscale digits, normalized with mean 0.1307/std 0.3081) and CIFAR-10 (50,000/10,000 train/test, $32\times32$ RGB, 10 object classes, normalized with per-channel mean (0.4914, 0.4822, 0.4465)/std (0.2470, 0.2435, 0.2610)) serve as the two benchmark datasets.
+
+\textbf{Protocol and fairness.} All experiments use a fixed seed (42) for Python, NumPy, and PyTorch, deterministic CuDNN settings, and identical train/test splits; no data augmentation, ensembling, or pretraining is used anywhere. Within each ablation, all variants share batch size, subsampling indices (when used), and classifier configuration, so that observed differences are attributable to the single factor under study. Accuracy on the held-out test split is the primary metric; classifier fit time (and, where noted, total runtime including feature extraction) is reported as a secondary, practically relevant metric.
+
+\textbf{Ablation strategy.} Design decisions are propagated forward in stages: (1) feature-set selection (1D), (2) 1D vs.\ 2D kernels at matched budgets, (3) padding strategy, (4) preprocessing banks (raw vs.\ per-image-normalized channels), (5) kernel configuration (size/dilation) at a fixed kernel count, and (6) kernel-count scaling. Each stage's winner defines the configuration carried into the next.
+
+\textbf{Environment.} Experiments ran on a Google Colab high-memory runtime with an NVIDIA A100 GPU, Python 3.12, PyTorch 2.9, Torchvision 0.24, scikit-learn 1.6, and NumPy 2.0.
+
+\section{Results}\label{sec:results}
+
+\subsection{Baselines}
+Table~\ref{tbl:main} summarizes the main comparison. The minimal 1D-ROCKET baseline already reaches 98.58\% on MNIST but only 62.58\% on CIFAR-10, reflecting that flattened 1D kernels discard the spatial structure that matters for natural images. The linear SVM trails clearly on both datasets (91.66\% / 37.90\%) and requires by far the longest training time (over two hours on either dataset), since it optimizes directly on high-dimensional pixel/projected features. The lightweight CNN reaches 99.06\% / 69.62\% with short, GPU-accelerated training.
+
+\begin{table}
+\caption{Main results: test accuracy and classifier/training time per method and dataset. ROCKET times denote classifier fit time after (cached) feature extraction; CNN and SVM times denote full training time.}\label{tbl:main}
+\begin{tabular*}{\tblwidth}{@{}llrr@{}}
+\toprule
+Method & Dataset & Accuracy & Time (s) \\
+\midrule
+Minimal 1D-ROCKET & MNIST     & 0.9858 & 13.3 \\
+2D-ROCKET (final) & MNIST     & \textbf{0.9941} & 103.9 \\
+Lightweight CNN    & MNIST     & 0.9906 & 77.8 \\
+Linear SVM         & MNIST     & 0.9166 & 7816.6 \\
+\midrule
+Minimal 1D-ROCKET & CIFAR-10  & 0.6258 & 10.5 \\
+2D-ROCKET (final) & CIFAR-10  & \textbf{0.7343} & 90.2 \\
+Lightweight CNN    & CIFAR-10  & 0.6962 & 79.3 \\
+Linear SVM         & CIFAR-10  & 0.3790 & 6890.1 \\
+\bottomrule
+\end{tabular*}
+\end{table}
+
+\subsection{Ablations}
+\textbf{Feature set.} Across eight combinations of PPV, Max, MPV, MIPV, and LSPV, accuracy increases monotonically with more statistics but with diminishing returns: on MNIST, PPV+Max alone reaches 98.58\% (6{,}048 features), while the full set (F8, 15{,}120 features) reaches 99.02\%. A reduced set (F5: PPV, Max, MPV, MIPV; 12{,}096 features) already attains 99.01\% at roughly 75\% of F8's feature budget. On CIFAR-10 the pattern is similar but the absolute gain is larger: PPV+Max reaches 62.58\%, F5 reaches 65.68\%, and the full set F8 reaches the best observed 65.92\%. F5 is adopted for subsequent experiments as a favorable accuracy/cost trade-off.
+
+\textbf{1D vs.\ 2D kernels.} At matched kernel budgets, 2D convolutions outperform their flattened 1D counterparts: 99.01\%$\to$99.14\% on MNIST and, more notably, 65.68\%$\to$66.80\% on CIFAR-10, at the cost of a larger feature dimension (15{,}120 vs.\ 12{,}096) and longer extraction/fit time. Subsequent experiments use 2D kernels throughout.
+
+\textbf{Padding.} \emph{Valid} padding gives the best CIFAR-10 accuracy (67.15\%, vs.\ 66.99\% for \emph{same} and 66.79\% for \emph{random}) at equal feature dimensionality, and on MNIST it matches \emph{same} padding (99.19\% vs.\ 99.20\%) while reducing the feature dimension from 15{,}120 to 13{,}385 and training time from 44.8\,s to 37.1\,s. Valid padding is adopted for the remainder of the study.
+
+\textbf{Preprocessing banks.} Comparing raw (dataset-normalized) channels, per-image z-score-preprocessed channels, and their concatenation shows a dataset-dependent effect. On MNIST all three variants are within 0.2 percentage points of each other (best: gray-only, 99.19\%). On CIFAR-10, per-image preprocessing \emph{reduces} accuracy relative to raw RGB input (65.31\% vs.\ 67.15\%), and concatenating both banks performs worse still (62.33\%), suggesting that per-image normalization removes inter-image color statistics that are informative for natural images. Raw (dataset-normalized) input is used going forward.
+
+\textbf{Kernel configuration and count.} Among five kernel-size/dilation configurations at a fixed budget of 3{,}024 kernels, a mixed configuration with moderate dilation (sizes $[3,5,7,9]$, dilations $[1,2]$) performs best on both datasets (99.34\% on MNIST, 71.89\% on CIFAR-10), outperforming both a single-scale undilated bank (the original ROCKET design, $[7,9,11]$, dilation 1) and heavily dilated small kernels. Scaling this configuration's kernel count from 1{,}000 to 7{,}000 improves CIFAR-10 accuracy from 66.83\% to 73.72\%, with diminishing returns beyond roughly 5{,}000 kernels (73.42\% at 5{,}000 vs.\ 73.72\% at 7{,}000, at roughly double the training time). MNIST saturates even earlier, gaining less than half a percentage point from 3{,}000 to 5{,}000 kernels. $N=5{,}000$ is selected as a practical compromise, tuned primarily for CIFAR-10.
+
+\subsection{Final configuration and per-class behavior}
+The final 2D-ROCKET pipeline (kernel sizes $[3,5,7,9]$, dilations $[1,2]$, $N=5{,}000$ kernels, valid padding, features PPV+Max+MPV+MIPV, $25{,}000$-dimensional feature vectors) reaches \textbf{99.41\%} on MNIST and \textbf{73.43\%} on CIFAR-10 (Table~\ref{tbl:main}), a gain of 0.83 and 7.75 percentage points, respectively, over the corresponding 1D-ROCKET ablation baselines. On MNIST, per-class accuracy is uniformly high and slightly exceeds the CNN; on CIFAR-10, per-class accuracy is more variable across models, with the final 2D-ROCKET pipeline attaining the highest per-class accuracies among the tested methods but with larger spread than on MNIST, reflecting the higher intra-class variability of natural images.
+
+As a proof of concept beyond MNIST/CIFAR-10, the same 2D-ROCKET configuration (with CIFAR-10-derived settings, unmodified) was evaluated on KTH-TIPS, a small ten-class texture dataset with varying lighting, viewpoint, and scale \citep{grauman2004kth}. 2D-ROCKET reached 94.7\% accuracy, versus 43.5\% for the linear SVM and 52.4\% for the lightweight CNN baseline, with a classifier fit time around 0.66\,s (versus 15.6\,s for the SVM and 10.8\,s for the CNN).
+
+\section{Discussion}\label{sec:discussion}
+
+The ablations indicate that most of 2D-ROCKET's discriminative power comes from a small, targeted set of local statistics: PPV and Max alone already capture the bulk of the signal, and additional statistics yield incremental gains at a clear feature-dimension and runtime cost. Preserving spatial structure via genuine 2D convolutions, rather than flattening images into 1D sequences, is the single largest architectural lever, particularly on CIFAR-10 where spatial and color structure is more informative than on MNIST's simple binary-like strokes. Kernel \emph{configuration} (mixed sizes with moderate dilation) matters more than raw kernel \emph{count}: multi-scale coverage consistently beats single-scale or heavily dilated banks, and accuracy plateaus once the kernel budget exceeds roughly 5,000, after which feature dimensionality and training time keep growing with little additional benefit. Padding behaves as a cheap, implementation-level regularizer: restrictive (valid) padding discards many boundary/large-receptive-field features that turn out to be largely redundant for these datasets, reducing cost without hurting accuracy. Preprocessing choices, by contrast, are dataset-dependent -- per-image normalization is neutral on grayscale digits but actively harmful on natural color images, since it removes inter-image color cues that carry class information.
+
+Relative to the baselines, 2D-ROCKET slightly outperforms the lightweight CNN on both datasets (by 0.35 points on MNIST, 3.81 points on CIFAR-10) while requiring no gradient-based training of its feature extractor. This result has to be read in light of what the CNN baseline actually is: two convolutional layers, no batch normalization, no augmentation, chosen deliberately to keep its complexity comparable to the other lightweight baselines (Sec.~\ref{sec:methods}). Such a shallow network itself composes features across only two layers and therefore exercises little of the deep, multi-scale hierarchical composition -- stacking many layers so that later ones respond to combinations of earlier, smaller-scale features -- that characterizes deeper CNN architectures (e.g., ResNets), which were explicitly excluded from this study's scope. Beating this particular baseline is consequently not evidence that 2D-ROCKET's flat, single-stage design can match deep, multi-scale CNNs in general: 2D-ROCKET has no mechanism at all for combining kernel responses across stages into higher-order, compositional features, whereas even a moderately deep CNN does. On object-recognition tasks where classes are distinguished by exactly this kind of multi-scale, compositional structure, a genuinely deep CNN would be expected to open a gap that no amount of additional random 2D-ROCKET kernels can close, since kernel count and diversity scale the width of a single stage, not its depth. 2D-ROCKET does, however, decisively outperform the linear SVM in both accuracy and training time on both datasets (the SVM takes roughly two hours per dataset, dominated by kernel-free but high-dimensional optimization, versus under two minutes for 2D-ROCKET's classifier fit). This positions 2D-ROCKET as an attractive middle ground for the right kind of data: more expressive than classical handcrafted-feature pipelines, cheaper to train and more transparent than a CNN, but only where classification does not hinge on hierarchical, multi-scale composition.
+
+The strongest practical case for the approach is suggested by the KTH-TIPS result: on a texture-dominated dataset, where local, repetitive statistics rather than multi-scale object composition drive classification, 2D-ROCKET's advantage over both baselines is far larger than on MNIST/CIFAR-10 -- including over the CNN, which gains comparatively little from its hierarchical structure when there is no object hierarchy to compose. This is consistent with the intuition that random local filters combined with simple statistics are naturally well matched to repetitive, texture-like structure -- the kind found in industrial surface inspection, material classification, or other structured imaging domains -- even without any domain-specific tuning, and it is this regime, not general object recognition, that the method is proposed for.
+
+Limitations include single-seed evaluation (small effect sizes, especially on near-saturated MNIST, should be treated cautiously without multi-seed replication), a fixed Ridge classifier (isolating feature quality but excluding gains from alternative classifiers), deliberately simple baselines (a more heavily tuned SVM or CNN could narrow the observed gaps), and growing memory/numerical-conditioning pressure as feature dimensionality reaches the tens of thousands.
+
+\section{Conclusion}\label{sec:conclusion}
+
+This work adapted ROCKET's random-kernel, statistics-based paradigm from one-dimensional time series to two-dimensional image classification. Preserving spatial structure through genuine 2D convolutions, combined with a compact set of aggregation statistics (PPV, Max, MPV, MIPV) and a multi-scale, moderately dilated kernel bank, is the key design choice that makes 2D-ROCKET effective within a single flat feature-extraction stage. The resulting pipeline reaches 99.41\% accuracy on MNIST and 73.43\% on CIFAR-10 without any learned convolutional weights, and slightly outperforms a deliberately shallow, two-layer CNN baseline on both datasets, in addition to clearly outperforming a linear SVM in accuracy and training time. This should not be over-interpreted: the shallow CNN baseline itself makes limited use of the deep, layered composition that lets genuinely deep networks assemble multi-scale object representations, and such deeper architectures were out of scope for this comparison. Given its flat, single-stage architecture, 2D-ROCKET has no mechanism to close that kind of gap regardless of kernel count, and this paper does \emph{not} propose it as a competitor to deep CNNs on natural-object image classification. A proof-of-concept on the texture-dominated KTH-TIPS dataset (94.7\% vs.\ 43.5\%/52.4\% for SVM/CNN) instead points to the domain where the approach is intended and most effective: repetitive, texture-like image data -- material and surface textures, inspection imagery, and similar structured signals -- where local statistics rather than composed, multi-scale object structure drive classification, and where the architectural advantage of deep networks over a flat random-feature bank is far smaller.
+
+2D-ROCKET is best understood as a lightweight, reproducible, and interpretable baseline for this texture-oriented regime, not as a replacement for deep networks on general vision tasks that require multi-scale object composition. Promising directions for future work include multi-seed statistical validation, domain-aware or structured (rather than purely random) kernel sampling, hybrid pipelines that combine random convolutions with a small trainable component to recover some hierarchical composition, dimensionality reduction to control feature-storage cost at large kernel budgets, and a systematic evaluation on industrial or scientific texture-classification tasks where the method's strengths appear most pronounced.
+
+\printcredits
+
+\bibliographystyle{cas-model2-names}
+\bibliography{cas-refs}
+
+\end{document}
