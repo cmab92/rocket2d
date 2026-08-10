@@ -28,6 +28,8 @@
 \usepackage{booktabs}
 \usepackage{amsmath,amssymb}
 \usepackage{graphicx}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.18}
 
 \begin{document}
 \let\WriteBookmarks\relax
@@ -174,6 +176,97 @@ The final 2D-ROCKET pipeline (kernel sizes $[3,5,7,9]$, dilations $[1,2]$, $N=5{
 
 As a proof of concept beyond MNIST/CIFAR-10, the same 2D-ROCKET configuration (with CIFAR-10-derived settings, unmodified) was evaluated on KTH-TIPS, a small ten-class texture dataset with varying lighting, viewpoint, and scale \citep{grauman2004kth}. 2D-ROCKET reached 94.7\% accuracy, versus 43.5\% for the linear SVM and 52.4\% for the lightweight CNN baseline, with a classifier fit time around 0.66\,s (versus 15.6\,s for the SVM and 10.8\,s for the CNN).
 
+\subsection{Real-world validation: industrial, medical, and texture imagery}\label{sec:realworld}
+
+To directly test the texture-oriented application scenario that the ablations above and the KTH-TIPS proof of concept point toward, the final 2D-ROCKET configuration (kernel sizes $[3,5,7,9]$, dilations $[1,2]$, $N=5{,}000$ kernels, valid padding, features PPV+Max+MPV+MIPV$_y$+MIPV$_x$, $25{,}000$-dimensional feature vectors) was carried over unmodified -- as with KTH-TIPS -- and evaluated end-to-end on three independently sourced, publicly available datasets spanning distinct real-world domains: NEU-DET, a six-class hot-rolled steel strip surface-defect dataset with 1{,}800 images \citep{song2013neu}; the Chest X-Ray Pneumonia dataset, 5{,}860 grayscale radiographs labeled NORMAL/PNEUMONIA \citep{kermany2018identifying}; and the Describable Textures Dataset (DTD), 5{,}640 images spanning 47 fine-grained texture-attribute classes \citep{cimpoi2014describing}. All three are accessed via their public Kaggle mirrors. Each dataset is resized to $128\times128$ grayscale and split 80/20 (stratified, seed 42, identical split shared by both methods) and evaluated against the same lightweight two-layer CNN baseline used throughout this paper (Sec.~\ref{sec:methods}), trained for 10 epochs with Adam. Unlike the cached-feature timings in Table~\ref{tbl:main}, reported times here cover the full pipeline -- data loading, training/feature extraction, and evaluation -- since features are not precomputed in this setting, giving a fairer end-to-end comparison for a deployment-like scenario.
+
+\begin{table}
+\caption{Real-world validation: test accuracy, macro F1, and total pipeline run time (data loading, training/feature extraction, evaluation) per method and dataset. All experiments use grayscale $128\times128$ inputs, a fixed seed (42), and a stratified 80/20 train/test split shared between both methods for a given dataset.}\label{tbl:realworld}
+\begin{tabular*}{\tblwidth}{@{}llrrr@{}}
+\toprule
+Method & Dataset & Accuracy & Macro F1 & Time (s) \\
+\midrule
+Lightweight CNN & NEU         & 0.8972 & 0.8979 & 18.7 \\
+2D-ROCKET        & NEU         & \textbf{0.9556} & \textbf{0.9555} & 319.7 \\
+\midrule
+Lightweight CNN & Chest X-Ray & \textbf{0.9514} & \textbf{0.9373} & 76.8 \\
+2D-ROCKET        & Chest X-Ray & 0.9283 & 0.9086 & 1065.5 \\
+\midrule
+Lightweight CNN & DTD         & 0.1152 & 0.1078 & 59.2 \\
+2D-ROCKET        & DTD         & \textbf{0.2828} & \textbf{0.2544} & 1015.5 \\
+\bottomrule
+\end{tabular*}
+\end{table}
+
+\begin{figure}
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+    ybar,
+    bar width=9pt,
+    width=\linewidth,
+    height=5cm,
+    symbolic x coords={NEU, Chest X-Ray, DTD},
+    xtick=data,
+    ymin=0, ymax=105,
+    ylabel={Accuracy (\%)},
+    ylabel style={font=\small},
+    tick label style={font=\small},
+    legend style={at={(0.5,-0.28)}, anchor=north, legend columns=-1, font=\small},
+    nodes near coords={\pgfmathprintnumber[precision=1]{\pgfplotspointmeta}},
+    nodes near coords style={font=\tiny},
+    enlarge x limits=0.3,
+]
+\addplot coordinates {(NEU,89.72) (Chest X-Ray,95.14) (DTD,11.52)};
+\addplot coordinates {(NEU,95.56) (Chest X-Ray,92.83) (DTD,28.28)};
+\legend{Lightweight CNN, 2D-ROCKET}
+\end{axis}
+\end{tikzpicture}
+\caption{Test accuracy (\%) of the lightweight CNN baseline and the final 2D-ROCKET configuration on NEU, Chest X-Ray Pneumonia, and DTD.}\label{fig:realworld-acc}
+\end{figure}
+
+\begin{figure}
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+    ybar,
+    bar width=9pt,
+    width=\linewidth,
+    height=5cm,
+    symbolic x coords={NEU, Chest X-Ray, DTD},
+    xtick=data,
+    ymode=log,
+    ylabel={Total run time (s, log scale)},
+    ylabel style={font=\small},
+    tick label style={font=\small},
+    legend style={at={(0.5,-0.28)}, anchor=north, legend columns=-1, font=\small},
+    point meta=explicit symbolic,
+    nodes near coords={\pgfplotspointmeta},
+    nodes near coords style={font=\tiny},
+    enlarge x limits=0.3,
+]
+\addplot coordinates {(NEU,18.7)[19] (Chest X-Ray,76.8)[77] (DTD,59.2)[59]};
+\addplot coordinates {(NEU,319.7)[320] (Chest X-Ray,1065.5)[1066] (DTD,1015.5)[1016]};
+\legend{Lightweight CNN, 2D-ROCKET}
+\end{axis}
+\end{tikzpicture}
+\caption{Total pipeline run time in seconds (log scale; data loading, training/feature extraction, and evaluation, uncached).}\label{fig:realworld-time}
+\end{figure}
+
+\begin{figure}
+\centering
+\includegraphics[width=\linewidth]{figures/cm_neu.png}
+\caption{NEU confusion matrices (60 test images per class).}\label{fig:cm-neu}
+\end{figure}
+
+\begin{figure}
+\centering
+\includegraphics[width=\linewidth]{figures/cm_xray.png}
+\caption{Chest X-Ray Pneumonia confusion matrices (317 NORMAL / 855 PNEUMONIA test images).}\label{fig:cm-xray}
+\end{figure}
+
+Results are summarized in Table~\ref{tbl:realworld} and Fig.~\ref{fig:realworld-acc}--\ref{fig:cm-xray}. On NEU, a genuinely texture-dominated industrial inspection task, 2D-ROCKET clearly outperforms the CNN (95.56\% vs.\ 89.72\%), reproducing the pattern already observed on KTH-TIPS. Fig.~\ref{fig:cm-neu} shows why: the CNN's errors concentrate heavily in one confusable pair (15 of 60 \emph{scratches} images predicted as \emph{inclusion}), whereas 2D-ROCKET's errors are smaller in number and more evenly spread across classes, with every per-class recall at 92\% or above. On DTD, a substantially harder 47-class fine-grained texture benchmark, both lightweight models struggle in absolute terms with no pretraining or augmentation at $128\times128$ resolution, but the relative gap remains large and in 2D-ROCKET's favor (28.28\% vs.\ 11.52\%, more than double), consistent with the hypothesis that a flat bank of random, multi-scale local-statistic features is better matched to texture-attribute discrimination than a two-layer CNN with no capacity for hierarchical composition; at 47 classes the full confusion matrix is not legible at print size and is omitted here, but is included among the run artifacts released with this work. Chest X-Ray Pneumonia inverts this pattern: the CNN reaches 95.14\% against 2D-ROCKET's 92.83\%. Pneumonia is diagnosed less from repetitive local texture than from spatially localized opacity patterns -- effectively a coarse shape/structure cue overlaid on lung anatomy -- and even a two-layer CNN's learned, spatially adaptive filters appear better matched to isolating this signal than a fixed random-kernel bank tuned for statistical, non-compositional texture cues. Fig.~\ref{fig:cm-xray} shows this gap is concentrated in missed pneumonia cases specifically, the clinically costlier error: the CNN misses 20 of 855 pneumonia cases (2.3\%) against 39 of 855 (4.6\%) for 2D-ROCKET, roughly double the false-negative rate. This inversion is itself informative rather than contradictory: it is the one dataset in this extended evaluation that is not primarily texture-dominated, and it is exactly there that the CNN regains its edge, sharpening rather than undermining the domain boundary this paper argues for. Across all three datasets, 2D-ROCKET's total (uncached) run time remains substantially higher than the CNN's -- roughly 5--17$\times$ depending on dataset size -- since, unlike the cached-feature timings in Table~\ref{tbl:main}, feature-extraction cost is included here. As with the rest of this study, these results reflect a single seed and no dataset-specific retuning (the CIFAR-10-tuned configuration was carried over unmodified, as for KTH-TIPS), and should be read as an initial, real-world-oriented validation rather than an exhaustive benchmark.
+
 \section{Discussion}\label{sec:discussion}
 
 The ablations indicate that most of 2D-ROCKET's discriminative power comes from a small, targeted set of local statistics: PPV and Max alone already capture the bulk of the signal, and additional statistics yield incremental gains at a clear feature-dimension and runtime cost. Preserving spatial structure via genuine 2D convolutions, rather than flattening images into 1D sequences, is the single largest architectural lever, particularly on CIFAR-10 where spatial and color structure is more informative than on MNIST's simple binary-like strokes. Kernel \emph{configuration} (mixed sizes with moderate dilation) matters more than raw kernel \emph{count}: multi-scale coverage consistently beats single-scale or heavily dilated banks, and accuracy plateaus once the kernel budget exceeds roughly 5,000, after which feature dimensionality and training time keep growing with little additional benefit. Padding behaves as a cheap, implementation-level regularizer: restrictive (valid) padding discards many boundary/large-receptive-field features that turn out to be largely redundant for these datasets, reducing cost without hurting accuracy. Preprocessing choices, by contrast, are dataset-dependent -- per-image normalization is neutral on grayscale digits but actively harmful on natural color images, since it removes inter-image color cues that carry class information.
@@ -182,13 +275,15 @@ Relative to the baselines, 2D-ROCKET slightly outperforms the lightweight CNN on
 
 The strongest practical case for the approach is suggested by the KTH-TIPS result: on a texture-dominated dataset, where local, repetitive statistics rather than multi-scale object composition drive classification, 2D-ROCKET's advantage over both baselines is far larger than on MNIST/CIFAR-10 -- including over the CNN, which gains comparatively little from its hierarchical structure when there is no object hierarchy to compose. This is consistent with the intuition that random local filters combined with simple statistics are naturally well matched to repetitive, texture-like structure -- the kind found in industrial surface inspection, material classification, or other structured imaging domains -- even without any domain-specific tuning, and it is this regime, not general object recognition, that the method is proposed for.
 
+The extended, real-world evaluation on NEU, Chest X-Ray Pneumonia, and DTD (Sec.~\ref{sec:realworld}) reinforces this picture rather than merely repeating it. On the two texture-dominated targets it was proposed for -- NEU surface defects and DTD attributes -- 2D-ROCKET again outperforms the CNN, carrying an unmodified, CIFAR-10-tuned configuration into genuinely different domains without retuning. On Chest X-Ray Pneumonia, a task driven by localized structural anomalies rather than repetitive texture, the ordering flips and the CNN regains the advantage. Taken together with the CIFAR-10 result in Table~\ref{tbl:main}, this is now a second, independent case in which the CNN's capacity for spatial composition outperforms 2D-ROCKET's flat feature bank on non-texture data, and it sharpens rather than blurs the domain boundary argued for throughout this paper: 2D-ROCKET's advantage is specific to texture-like statistical regularity, not general-purpose.
+
 Limitations include single-seed evaluation (small effect sizes, especially on near-saturated MNIST, should be treated cautiously without multi-seed replication), a fixed Ridge classifier (isolating feature quality but excluding gains from alternative classifiers), deliberately simple baselines (a more heavily tuned SVM or CNN could narrow the observed gaps), and growing memory/numerical-conditioning pressure as feature dimensionality reaches the tens of thousands.
 
 \section{Conclusion}\label{sec:conclusion}
 
 This work adapted ROCKET's random-kernel, statistics-based paradigm from one-dimensional time series to two-dimensional image classification. Preserving spatial structure through genuine 2D convolutions, combined with a compact set of aggregation statistics (PPV, Max, MPV, MIPV) and a multi-scale, moderately dilated kernel bank, is the key design choice that makes 2D-ROCKET effective within a single flat feature-extraction stage. The resulting pipeline reaches 99.41\% accuracy on MNIST and 73.43\% on CIFAR-10 without any learned convolutional weights, and slightly outperforms a deliberately shallow, two-layer CNN baseline on both datasets, in addition to clearly outperforming a linear SVM in accuracy and training time. This should not be over-interpreted: the shallow CNN baseline itself makes limited use of the deep, layered composition that lets genuinely deep networks assemble multi-scale object representations, and such deeper architectures were out of scope for this comparison. Given its flat, single-stage architecture, 2D-ROCKET has no mechanism to close that kind of gap regardless of kernel count, and this paper does \emph{not} propose it as a competitor to deep CNNs on natural-object image classification. A proof-of-concept on the texture-dominated KTH-TIPS dataset (94.7\% vs.\ 43.5\%/52.4\% for SVM/CNN) instead points to the domain where the approach is intended and most effective: repetitive, texture-like image data -- material and surface textures, inspection imagery, and similar structured signals -- where local statistics rather than composed, multi-scale object structure drive classification, and where the architectural advantage of deep networks over a flat random-feature bank is far smaller.
 
-2D-ROCKET is best understood as a lightweight, reproducible, and interpretable baseline for this texture-oriented regime, not as a replacement for deep networks on general vision tasks that require multi-scale object composition. Promising directions for future work include multi-seed statistical validation, domain-aware or structured (rather than purely random) kernel sampling, hybrid pipelines that combine random convolutions with a small trainable component to recover some hierarchical composition, dimensionality reduction to control feature-storage cost at large kernel budgets, and a systematic evaluation on industrial or scientific texture-classification tasks where the method's strengths appear most pronounced.
+2D-ROCKET is best understood as a lightweight, reproducible, and interpretable baseline for this texture-oriented regime, not as a replacement for deep networks on general vision tasks that require multi-scale object composition. An initial step toward the systematic, real-world evaluation this scope calls for was carried out in Sec.~\ref{sec:realworld}: the unmodified, CIFAR-10-tuned 2D-ROCKET configuration was applied to industrial surface-defect (NEU), texture-attribute (DTD), and medical (Chest X-Ray Pneumonia) imagery, again outperforming the CNN baseline on the two texture-dominated datasets while ceding ground on the structurally driven pneumonia task -- corroborating this paper's central domain claim on independently sourced data. Remaining promising directions for future work include multi-seed statistical validation, domain-aware or structured (rather than purely random) kernel sampling, hybrid pipelines that combine random convolutions with a small trainable component to recover some hierarchical composition, dimensionality reduction to control feature-storage cost at large kernel budgets, and dataset-specific hyperparameter tuning for the industrial and texture-classification tasks where the method's strengths appear most pronounced.
 
 \printcredits
 
