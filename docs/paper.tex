@@ -28,6 +28,7 @@
 \usepackage{booktabs}
 \usepackage{amsmath,amssymb}
 \usepackage{graphicx}
+\usepackage{bbm}
 \usepackage{pgfplots}
 \pgfplotsset{compat=1.18}
 \newcommand{\std}[1]{$\,\pm\,$#1}
@@ -114,7 +115,7 @@ As a reference and sanity check, a minimal, independent 1D-ROCKET implementation
 and each kernel yields two features,
 \begin{equation}
 f_{\text{max}} = \max_t (x*k)[t], \qquad
-f_{\text{PPV}} = \frac{1}{L-l+1}\sum_t \mathbb{1}\big((x*k)[t] > 0\big).
+f_{\text{PPV}} = \frac{1}{L-l+1}\sum_t \mathbbm{1}\big((x*k)[t] > 0\big).
 \end{equation}
 Kernel sizes $k \in \{7,9,11\}$ and a per-kernel-group random choice between \emph{same} and \emph{valid} padding (deterministic given the seed) are used, followed by a Ridge classifier.
 
