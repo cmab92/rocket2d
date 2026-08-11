@@ -44,7 +44,10 @@ def _run_job(args: tuple[str, int]) -> None:
         "weighted_f1": metrics["weighted_f1"], "seconds": elapsed,
     }
     out_path.write_text(json.dumps(result, indent=2))
-    print(f"[done] svm/{dataset}/seed={seed}: acc={metrics['accuracy']:.4f} ({elapsed:.1f}s)", flush=True)
+    print(
+        f"[done] svm/{dataset}/seed={seed}: acc={metrics['accuracy']:.4f} ({elapsed:.1f}s)",
+        flush=True,
+    )
 
 
 def main() -> None:

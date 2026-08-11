@@ -81,13 +81,30 @@ Notes:
   writes to `docs/figures/`.
 - The linear-SVM row in Table 2 is produced by `scripts/run_svm_multiseed.py`
   (`run_svm` in `src/rocket2d/training.py`: flattened, standardized pixels,
-  Gaussian random projection to 2,048 dims, `LinearSVC`, `C=0.1`,
-  `max_iter=20000` — the same methodology used for MNIST/CIFAR-10 in Table 1).
-  NEU converges in ~5-6 min total for 10 seeds; DTD's 47-class one-vs-rest
-  fit is dramatically slower (each seed took well over 30 minutes on this
-  repo's dev machine, still running at time of writing) — budget accordingly
-  and do not assume this baseline is cheap just because SVM lost badly in
-  Table 1.
+  Gaussian random projection to 2,048 dims, then `SGDClassifier(loss="hinge")`
+  with `alpha` chosen from `[1e-4, 1e-3, 1e-2]` on an internal validation
+  split). This is *not* the same solver used for MNIST/CIFAR-10 in Table 1
+  (`LinearSVC`, `C=0.1`, `max_iter=20000`): `LinearSVC`'s liblinear solver did
+  not converge within a practical time budget on DTD's 4,512-sample, 47-class
+  one-vs-rest fit (13+ minutes, still running), whereas `SGDClassifier` scales
+  near-linearly and matched or beat a fully-converged `LinearSVC` on NEU in a
+  direct side-by-side check, so it is used for all three real-world datasets
+  instead. Budget ~30–40 min for NEU/10 seeds, ~1.5h for Chest X-Ray, and
+  ~2.5–3h for DTD (each DTD seed is ~900–1,100s even after the fix below).
+- **`SGDClassifier(n_jobs=-1)` inside a `multiprocessing`-parallel sweep
+  causes severe CPU oversubscription**, especially for DTD's 47-class
+  one-vs-rest fits (6 parallel workers x unbounded per-worker OVR threads).
+  `run_svm` therefore hardcodes `n_jobs=2`; do not raise this without also
+  lowering the sweep's own worker count, or per-worker CPU% will blow past
+  500% and wall time will not improve.
+- **The SAR RFI experiment (Sec. 6 below) is a deliberate exception**: its
+  `run_svm` (local to `scripts/run_sar_rfi_experiment.py`) uses `LinearSVC`,
+  not `SGDClassifier`. That dataset is small-n/high-p (172 training examples,
+  4,913 features) and binary, the regime `LinearSVC`'s dual solver is fast
+  and accurate in — checked directly, `LinearSVC` reached 79.5% there against
+  70.4% best-of-grid for `SGDClassifier`. Do not "fix" this to use
+  `SGDClassifier` for consistency; it is a verified regime-dependent choice,
+  not an oversight.
 
 ## 4. Table 3 — LSPV (Sec. 5.5)
 

@@ -61,7 +61,7 @@
 
 % Here goes the abstract
 \begin{abstract}
-Deep learning achieves strong performance in image classification but often requires costly training and substantial computational resources. This paper explores a lightweight alternative by adapting the ROCKET framework from time-series classification to two-dimensional image data. The proposed 2D-ROCKET approach applies large banks of random 2D convolutional kernels and summarizes their responses using simple aggregation statistics, enabling efficient feature extraction without learned filters and, structurally, without the stacked, hierarchical multi-scale composition that gives deep CNNs their representational power. MNIST and CIFAR-10 are used here not as target applications but as controlled, well-understood benchmarks to probe the method's ceiling: preserving spatial structure with 2D kernels improves performance compared to flattened 1D variants, and a final configuration (5,000 mixed-scale kernels, moderate dilation, valid padding) reaches 99.41\% accuracy on MNIST and 73.43\% on CIFAR-10, slightly ahead of a deliberately shallow, two-layer CNN baseline on both benchmarks and far ahead of a linear SVM, at a fraction of the SVM's training time. This should not be read as evidence that 2D-ROCKET rivals deep CNNs in general: the shallow baseline itself has little of the multi-scale hierarchical depth that distinguishes modern, deeper architectures, which were out of scope for this comparison. Object recognition on natural images is, in any case, not the domain 2D-ROCKET is proposed for: a proof-of-concept on the texture-dominated KTH-TIPS dataset (94.7\% accuracy, versus 43.5\%/52.4\% for SVM/CNN) indicates that the method's real niche is texture-like, repetitive-pattern imagery -- material and surface textures, inspection data, or structured surface signals -- where classification does not depend on the multi-scale, compositional object structure that only deep, hierarchical architectures can capture. This texture-domain scoping is tested directly on three real-world datasets -- industrial surface-defect inspection (NEU), a texture-attribute benchmark (DTD), and chest X-ray pneumonia screening -- over ten seeds with paired significance testing. 2D-ROCKET wins significantly on the texture-dominated datasets (NEU, DTD) and loses significantly, by a smaller margin, on the non-texture, localized-pathology chest X-ray task; adding a previously unimplemented positional-pooling feature (LSPV) closes the chest X-ray gap to statistical indistinguishability at negligible cost, with a capacity-matched control attributing roughly three-quarters of that gain to positional resolution rather than added feature capacity. A further test on genuine 1D time series -- a freshly implemented 1D-ROCKET applied to raw Sentinel-1 SAR echo lines for radio-frequency-interference detection (216 examples) -- beats a linear SVM but not a CNN, consistent with a texture-vs-localized-anomaly distinction rather than sample size alone determining where ROCKET-family methods have an edge. Overall, 2D-ROCKET provides a simple, training-efficient, and interpretable baseline, and highlights random convolutional feature extraction as a promising direction for lightweight, texture-oriented image classification, rather than as a competitor to deep CNNs on general object recognition.
+Deep learning achieves strong image-classification performance but at substantial training cost. This paper adapts ROCKET, originally a time-series method, to two-dimensional image data: large banks of random 2D convolutional kernels are summarized with simple aggregation statistics and fed to a linear classifier, with no learned filters and none of a deep CNN's hierarchical, multi-scale composition. On MNIST and CIFAR-10, used as controlled benchmarks rather than target applications, a final configuration (5,000 mixed-scale kernels) reaches 99.41\%/73.43\% accuracy, slightly ahead of a shallow two-layer CNN and decisively ahead of a linear SVM -- not evidence of competing with genuinely deep networks, which are out of scope. The intended niche, texture-like imagery, is confirmed on KTH-TIPS (94.7\% vs.\ 43.5\%/52.4\% for SVM/CNN) and tested directly, with ten-seed paired significance testing against both baselines, on three real-world datasets: 2D-ROCKET wins significantly on texture-dominated surface-defect (NEU) and texture-attribute (DTD) data, and loses significantly, more narrowly, on non-texture chest X-ray pneumonia screening, where the pathology is spatially localized rather than textural. Adding a previously unimplemented positional-pooling feature (LSPV) closes that gap to statistical indistinguishability, confirmed with a capacity-matched control. A further test on genuine 1D time series -- raw Sentinel-1 SAR echoes, for radio-frequency-interference detection -- extends this texture-vs-localized-anomaly account to a non-image domain, again beating a linear SVM but not a CNN. 2D-ROCKET emerges as a lightweight, interpretable baseline for texture-dominated and low-data regimes -- with a deployed model 3--72$\times$ smaller than the CNN baselines across all tasks -- not a general competitor to deep CNNs.
 \end{abstract}
 
 % Research highlights
@@ -186,22 +186,25 @@ As a proof of concept beyond MNIST/CIFAR-10, the same 2D-ROCKET configuration (w
 The final 2D-ROCKET configuration (kernel sizes $[3,5,7,9]$, dilations $[1,2]$, $N=5{,}000$ kernels, valid padding, features PPV+Max+MPV+MIPV$_y$+MIPV$_x$, $25{,}000$-dimensional feature vectors), carried over unmodified as with KTH-TIPS, is evaluated on three real-world datasets: NEU-DET, a six-class hot-rolled steel strip surface-defect dataset (1{,}800 images), sharing its image source with the original NEU-CLS classification benchmark \citep{song2013neu} though introduced separately with (here unused) detection annotations; the Chest X-Ray Pneumonia dataset, 5{,}860 grayscale radiographs labeled NORMAL/PNEUMONIA \citep{kermany2018identifying}; and the Describable Textures Dataset (DTD), 5{,}640 images across 47 texture-attribute classes \citep{cimpoi2014describing}. All three are accessed via their public Kaggle mirrors. Each dataset is resized to $128\times128$ grayscale and split 80/20 (stratified per seed, shared between methods), evaluated against the same lightweight CNN baseline (Sec.~\ref{sec:methods}) trained for 30 epochs, longer than the 10 used for MNIST/CIFAR-10 and applied uniformly across all three datasets (Fig.~\ref{fig:dtd-overfit} shows the resulting training-loss trajectory for DTD, the hardest of the three). Every (method, dataset) combination is run over ten seeds (42--51, reseeding data split, model initialization, and kernel sampling jointly), reported as mean\,$\pm$\,population standard deviation with a paired $t$-test per dataset and a Holm--Bonferroni correction across the three tests (Table~\ref{tbl:realworld} reports both raw and adjusted $p$; all three remain significant at $\alpha=0.05$, NEU's adjusted value closest to the threshold). Reported times cover the full pipeline (data loading, training/feature extraction, evaluation) from a single uncontended seed-42 run, unlike Table~\ref{tbl:main}'s cached-feature timings; the ten-seed sweep itself ran seeds concurrently on shared hardware, which inflates wall time and is not used for the time column. Secs.~\ref{sec:realworld}--\ref{sec:sar} ran on CPU (16-core/32-thread AMD Ryzen 9 9950X, 60\,GB RAM, no GPU; Python 3.14, PyTorch 2.13, scikit-learn 1.9, NumPy 2.5), unlike the Colab/A100 environment used for Table~\ref{tbl:main} (Sec.~\ref{sec:setup}) -- run times across the two are not comparable.
 
 \begin{table}
-\caption{Real-world validation: test accuracy and macro F1 (mean\,$\pm$\,population std over 10 seeds), and total pipeline run time (single uncontended seed-42 run; data loading, training/feature extraction, evaluation) per method and dataset. All experiments use grayscale $128\times128$ inputs and a stratified 80/20 train/test split shared between both methods for a given seed. $p$-values are from a paired $t$-test (matched by seed, $n=10$) on accuracy; $p_{\mathrm{Holm}}$ is the Holm--Bonferroni-adjusted value across the three tests in this table.}\label{tbl:realworld}
+\caption{Real-world validation: test accuracy and macro F1 (mean\,$\pm$\,population std over 10 seeds), and total pipeline run time (data loading, training/feature extraction, evaluation) per method and dataset. All experiments use grayscale $128\times128$ inputs and a stratified 80/20 train/test split shared between all three methods for a given seed. CNN/2D-ROCKET times are single uncontended seed-42 runs; the linear-SVM baseline (\texttt{SGDClassifier}, Sec.~\ref{sec:discussion}) was fit as part of a separate, contended multi-seed sweep, so its time is not directly comparable and is reported for orientation only. $p$-values are paired $t$-tests (matched by seed, $n=10$) on accuracy; $p_{\mathrm{Holm}}$ is Holm--Bonferroni-adjusted across the three CNN-vs-2D-ROCKET tests in this table.}\label{tbl:realworld}
 \begin{tabular*}{\tblwidth}{@{}llrrr@{}}
 \toprule
 Method & Dataset & Accuracy & Macro F1 & Time (s) \\
 \midrule
 Lightweight CNN & NEU         & 0.925\std{0.030} & 0.923\std{0.031} & 57.1 \\
 2D-ROCKET        & NEU         & \textbf{0.955}\std{0.012} & \textbf{0.955}\std{0.012} & 319.7 \\
-\multicolumn{5}{@{}l}{\footnotesize $p=0.038$, $p_{\mathrm{Holm}}=0.038$ (ROCKET higher)} \\
+Linear SVM       & NEU         & 0.482\std{0.023} & 0.477\std{0.024} & 25.4 \\
+\multicolumn{5}{@{}l}{\footnotesize CNN vs.\ ROCKET $p=0.038$, $p_{\mathrm{Holm}}=0.038$ (ROCKET higher); ROCKET vs.\ SVM $p=3.1\times10^{-12}$} \\
 \midrule
 Lightweight CNN & Chest X-Ray & \textbf{0.958}\std{0.006} & \textbf{0.947}\std{0.008} & 197.1 \\
 2D-ROCKET        & Chest X-Ray & 0.935\std{0.005} & 0.919\std{0.006} & 1065.5 \\
-\multicolumn{5}{@{}l}{\footnotesize $p=4.6\times10^{-7}$, $p_{\mathrm{Holm}}=9.2\times10^{-7}$ (CNN higher)} \\
+Linear SVM       & Chest X-Ray & 0.924\std{0.005} & 0.900\std{0.007} & 77.8 \\
+\multicolumn{5}{@{}l}{\footnotesize CNN vs.\ ROCKET $p=4.6\times10^{-7}$, $p_{\mathrm{Holm}}=9.2\times10^{-7}$ (CNN higher); ROCKET vs.\ SVM $p=1.3\times10^{-3}$} \\
 \midrule
 Lightweight CNN & DTD         & 0.116\std{0.016} & 0.112\std{0.015} & 158.0 \\
 2D-ROCKET        & DTD         & \textbf{0.282}\std{0.012} & \textbf{0.255}\std{0.013} & 1015.5 \\
-\multicolumn{5}{@{}l}{\footnotesize $p=3.0\times10^{-10}$, $p_{\mathrm{Holm}}=9.0\times10^{-10}$ (ROCKET higher)} \\
+Linear SVM       & DTD         & 0.063\std{0.005} & 0.061\std{0.005} & 896.2 \\
+\multicolumn{5}{@{}l}{\footnotesize CNN vs.\ ROCKET $p=3.0\times10^{-10}$, $p_{\mathrm{Holm}}=9.0\times10^{-10}$ (ROCKET higher); ROCKET vs.\ SVM $p=4.8\times10^{-13}$} \\
 \bottomrule
 \end{tabular*}
 \end{table}
@@ -211,7 +214,7 @@ Lightweight CNN & DTD         & 0.116\std{0.016} & 0.112\std{0.015} & 158.0 \\
 \begin{tikzpicture}
 \begin{axis}[
     ybar,
-    bar width=9pt,
+    bar width=6pt,
     width=\linewidth,
     height=5cm,
     symbolic x coords={NEU, Chest X-Ray, DTD},
@@ -220,7 +223,7 @@ Lightweight CNN & DTD         & 0.116\std{0.016} & 0.112\std{0.015} & 158.0 \\
     ylabel={Accuracy (\%)},
     ylabel style={font=\small},
     tick label style={font=\small},
-    legend style={at={(0.5,-0.28)}, anchor=north, legend columns=-1, font=\small},
+    legend style={at={(0.5,-0.30)}, anchor=north, legend columns=-1, font=\small},
     error bars/y dir=both,
     error bars/y explicit,
     enlarge x limits=0.3,
@@ -229,10 +232,12 @@ Lightweight CNN & DTD         & 0.116\std{0.016} & 0.112\std{0.015} & 158.0 \\
     coordinates {(NEU,92.50) +- (0,2.96) (Chest X-Ray,95.83) +- (0,0.60) (DTD,11.61) +- (0,1.56)};
 \addplot+[error bars/.cd, y dir=both, y explicit]
     coordinates {(NEU,95.47) +- (0,1.25) (Chest X-Ray,93.54) +- (0,0.47) (DTD,28.21) +- (0,1.20)};
-\legend{Lightweight CNN, 2D-ROCKET}
+\addplot+[error bars/.cd, y dir=both, y explicit]
+    coordinates {(NEU,48.17) +- (0,2.34) (Chest X-Ray,92.42) +- (0,0.50) (DTD,6.28) +- (0,0.53)};
+\legend{Lightweight CNN, 2D-ROCKET, Linear SVM}
 \end{axis}
 \end{tikzpicture}
-\caption{Test accuracy (\%, mean $\pm$ std over 10 seeds) of the lightweight CNN baseline and the final 2D-ROCKET configuration on NEU, Chest X-Ray Pneumonia, and DTD. Differences are statistically significant on all three datasets (paired $t$-test, $n=10$; Table~\ref{tbl:realworld}).}\label{fig:realworld-acc}
+\caption{Test accuracy (\%, mean $\pm$ std over 10 seeds) of the lightweight CNN baseline, the final 2D-ROCKET configuration, and a linear SVM baseline on NEU, Chest X-Ray Pneumonia, and DTD. CNN-vs-2D-ROCKET differences are statistically significant on all three datasets, as is 2D-ROCKET vs.\ SVM (paired $t$-test, $n=10$; Table~\ref{tbl:realworld}).}\label{fig:realworld-acc}
 \end{figure}
 
 \begin{figure}
@@ -240,7 +245,7 @@ Lightweight CNN & DTD         & 0.116\std{0.016} & 0.112\std{0.015} & 158.0 \\
 \begin{tikzpicture}
 \begin{axis}[
     ybar,
-    bar width=9pt,
+    bar width=6pt,
     width=\linewidth,
     height=5cm,
     symbolic x coords={NEU, Chest X-Ray, DTD},
@@ -249,7 +254,7 @@ Lightweight CNN & DTD         & 0.116\std{0.016} & 0.112\std{0.015} & 158.0 \\
     ylabel={Total run time (s, log scale)},
     ylabel style={font=\small},
     tick label style={font=\small},
-    legend style={at={(0.5,-0.28)}, anchor=north, legend columns=-1, font=\small},
+    legend style={at={(0.5,-0.30)}, anchor=north, legend columns=-1, font=\small},
     point meta=explicit symbolic,
     nodes near coords={\pgfplotspointmeta},
     nodes near coords style={font=\tiny},
@@ -257,10 +262,11 @@ Lightweight CNN & DTD         & 0.116\std{0.016} & 0.112\std{0.015} & 158.0 \\
 ]
 \addplot coordinates {(NEU,57.1)[57] (Chest X-Ray,197.1)[197] (DTD,158.0)[158]};
 \addplot coordinates {(NEU,319.7)[320] (Chest X-Ray,1065.5)[1066] (DTD,1015.5)[1016]};
-\legend{Lightweight CNN, 2D-ROCKET}
+\addplot coordinates {(NEU,25.4)[25] (Chest X-Ray,77.8)[78] (DTD,896.2)[896]};
+\legend{Lightweight CNN, 2D-ROCKET, Linear SVM}
 \end{axis}
 \end{tikzpicture}
-\caption{Total pipeline run time in seconds (log scale; data loading, training/feature extraction, and evaluation, uncached).}\label{fig:realworld-time}
+\caption{Total pipeline run time in seconds (log scale; data loading, training/feature extraction, and evaluation, uncached). CNN/2D-ROCKET bars are single uncontended runs; the SVM bar is from a contended multi-seed sweep (Table~\ref{tbl:realworld}) and is not directly comparable in absolute terms.}\label{fig:realworld-time}
 \end{figure}
 
 \begin{figure}
@@ -287,6 +293,8 @@ On NEU, 2D-ROCKET reaches 95.5\%\std{1.2} against the CNN's 92.5\%\std{3.0} ($p=
 
 DTD gives the clearest result: 2D-ROCKET reaches 28.2\%\std{1.2} against the CNN's 11.6\%\std{1.6} ($p=3.0\times10^{-10}$), a 16.6-point gap exceeding seed-to-seed noise on both sides. Fig.~\ref{fig:dtd-overfit} (seed 42) shows the CNN memorizing its $\sim$96 training images per class with no augmentation; that seed's 8.51\% test accuracy is the lowest of the ten seeds run (mean 11.6\%), so the memorization pattern is real but not necessarily its dominant driver of the ten-seed mean. 2D-ROCKET's ceiling (26.6--30.0\% across seeds) sits far above the CNN's (8.5--13.8\%) regardless of seed, consistent with a fixed-feature, linear-Ridge design being harder to overfit than a from-scratch CNN in a low-data, per-class regime. DTD also differs from NEU in class count (47 vs.\ 6), not only samples per class, and this design cannot separate the two as explanations for the CNN's weaker DTD performance; disentangling them needs a dataset varying class count and per-class samples independently, left for future work.
 
+The linear SVM baseline (Table~\ref{tbl:realworld}; \texttt{SGDClassifier} on a 2,048-dimensional random projection of flattened pixels, Sec.~\ref{sec:discussion}) is decisively behind 2D-ROCKET on NEU (48.2\%\std{2.3}, $-47.3$ points, $p=3.1\times10^{-12}$) and DTD (6.3\%\std{0.5}, $-21.9$ points, $p=4.8\times10^{-13}$), reproducing the pattern from Table~\ref{tbl:main}. Chest X-Ray is the exception: the SVM reaches 92.4\%\std{0.5}, within 1.1 points of 2D-ROCKET (still significant, $p=1.3\times10^{-3}$, given both methods' low variance) and only 3.4 points behind the CNN -- a binary, comparatively linearly separable task is evidently within reach of a linear classifier on raw pixels, unlike NEU's six-way or DTD's 47-way fine-grained problems.
+
 2D-ROCKET's uncached run time remains 5--6$\times$ the CNN's across datasets (Table~\ref{tbl:realworld}), since feature extraction is included here, unlike Table~\ref{tbl:main}'s cached-feature timings. These results reflect a single, CIFAR-10-tuned configuration with no dataset-specific retuning beyond the epoch-count adjustment above.
 
 \subsection{Closing the Chest X-Ray gap: restoring positional resolution}\label{sec:lspv}
@@ -296,13 +304,14 @@ PPV, Max, and MPV pool over the entire activation map per kernel, and MIPV reduc
 Adding LSPV to Chest X-Ray (ten seeds, all else unchanged) gives 95.6\%\std{0.4} (macro F1 0.944\std{0.006}), against the CNN's 95.8\%\std{0.6} and the original feature set's 93.5\%\std{0.5} (Table~\ref{tbl:lspv}). The gap to the CNN is no longer significant ($p=0.22$), while the improvement over the original feature set is ($p=2.5\times10^{-7}$). Mean run time (1{,}937\,s) is essentially unchanged from 1{,}993\,s without LSPV, since convolution over the kernel bank dominates cost far more than the Ridge fit or the added pooling step. 2D-ROCKET's weakness on Chest X-Ray is therefore not an inherent property of random-kernel feature extraction but a specific, cheaply fixable consequence of discarding positional information during pooling.
 
 \begin{table}
-\caption{Chest X-Ray Pneumonia: adding the LSPV feature (mean\,$\pm$\,std over 10 seeds; capacity control over 5 seeds, 42--46). $p$-values are paired $t$-tests against 2D-ROCKET+LSPV, matched by seed ($n=10$ for the first two rows, $n=5$ for the capacity control).}\label{tbl:lspv}
+\caption{Chest X-Ray Pneumonia: adding the LSPV feature (mean\,$\pm$\,std over 10 seeds; capacity control over 5 seeds, 42--46). $p$-values are paired $t$-tests against 2D-ROCKET+LSPV, matched by seed ($n=10$ for all rows except the capacity control, $n=5$).}\label{tbl:lspv}
 \begin{tabular*}{\tblwidth}{@{}lrrl@{}}
 \toprule
 Method & Accuracy & Macro F1 & $p$ vs.\ +LSPV \\
 \midrule
 Lightweight CNN     & 0.958\std{0.006} & 0.947\std{0.008} & $0.22$ \\
 2D-ROCKET            & 0.935\std{0.005} & 0.919\std{0.006} & $2.5\times10^{-7}$ \\
+Linear SVM           & 0.924\std{0.005} & 0.900\std{0.007} & $1.6\times10^{-7}$ \\
 2D-ROCKET + LSPV & \textbf{0.956}\std{0.004} & \textbf{0.944}\std{0.006} & -- \\
 \midrule
 2D-ROCKET, 8k kernels, no LSPV & 0.938\std{0.005} & 0.922\std{0.006} & $2.4\times10^{-3}$ \\
@@ -357,13 +366,29 @@ The ablations indicate that most of 2D-ROCKET's discriminative power comes from 
 
 Relative to the baselines, 2D-ROCKET slightly outperforms the lightweight CNN on both datasets (by 0.35 points on MNIST, 3.81 points on CIFAR-10) while requiring no gradient-based training of its feature extractor. This result has to be read in light of what the CNN baseline actually is: two convolutional layers, no batch normalization, no augmentation, chosen deliberately to keep its complexity comparable to the other lightweight baselines (Sec.~\ref{sec:methods}). Such a shallow network itself composes features across only two layers and therefore exercises little of the deep, multi-scale hierarchical composition -- stacking many layers so that later ones respond to combinations of earlier, smaller-scale features -- that characterizes deeper CNN architectures (e.g., ResNets), which were explicitly excluded from this study's scope. Beating this particular baseline is consequently not evidence that 2D-ROCKET's flat, single-stage design can match deep, multi-scale CNNs in general: 2D-ROCKET has no mechanism at all for combining kernel responses across stages into higher-order, compositional features, whereas even a moderately deep CNN does. On object-recognition tasks where classes are distinguished by exactly this kind of multi-scale, compositional structure, a genuinely deep CNN would be expected to open a gap that no amount of additional random 2D-ROCKET kernels can close, since kernel count and diversity scale the width of a single stage, not its depth. 2D-ROCKET does, however, decisively outperform the linear SVM in both accuracy and training time on both datasets (the SVM takes roughly two hours per dataset, dominated by kernel-free but high-dimensional optimization, versus under two minutes for 2D-ROCKET's classifier fit). This positions 2D-ROCKET as an attractive middle ground for the right kind of data: more expressive than classical handcrafted-feature pipelines, cheaper to train and more transparent than a CNN, but only where classification does not hinge on hierarchical, multi-scale composition.
 
+This paper's training-time comparisons should not obscure a second, independent advantage: the deployed model itself. Table~\ref{tbl:modelsize} compares parameter/coefficient storage (32-bit floats) for the CNN baseline against 2D-ROCKET's kernel bank plus Ridge classifier, across every classification task in this paper. 2D-ROCKET's deployed footprint is 3--72$\times$ smaller than the CNN's, most dramatically on Chest X-Ray and SAR RFI (binary tasks, so the Ridge classifier's weight matrix stays small) and least dramatically on DTD, where 47 output classes inflate that same matrix. This asymmetry has a specific, checkable cause rather than being a general law about CNNs: the CNN baseline's fully connected layer takes the flattened post-convolution feature map (no global pooling) as input, so its size scales with image resolution squared rather than channel count -- a deliberately simple, unoptimized design choice (Sec.~\ref{sec:methods}) that a global-average-pooling CNN would avoid. The comparison is nonetheless a fair one between the two baselines actually evaluated in this paper, and it means 2D-ROCKET's efficiency case for resource-constrained deployment does not rest on training cost alone.
+
+\begin{table}
+\caption{Deployed model size (32-bit float parameters/coefficients) per task. CNN: convolutional + fully connected weights. 2D/1D-ROCKET: kernel weights and biases plus the fitted Ridge classifier's coefficient matrix and intercept.}\label{tbl:modelsize}
+\begin{tabular*}{\tblwidth}{@{}lrrr@{}}
+\toprule
+Task & CNN & ROCKET & Ratio \\
+\midrule
+NEU (6 cls)         & 16{,}406\,KB & 1{,}406\,KB & $11.7\times$ \\
+Chest X-Ray (2 cls) & 16{,}404\,KB & 1{,}016\,KB & $16.2\times$ \\
+DTD (47 cls)        & 16{,}427\,KB & 5{,}410\,KB & $3.0\times$ \\
+SAR RFI (2 cls, 1D) & 19{,}668\,KB & 273\,KB     & $71.9\times$ \\
+\bottomrule
+\end{tabular*}
+\end{table}
+
 The strongest practical case for the approach is suggested by the KTH-TIPS result: on a texture-dominated dataset, where local, repetitive statistics rather than multi-scale object composition drive classification, 2D-ROCKET's advantage over both baselines is far larger than on MNIST/CIFAR-10 -- including over the CNN, which gains comparatively little from its hierarchical structure when there is no object hierarchy to compose. This is consistent with the intuition that random local filters combined with simple statistics are naturally well matched to repetitive, texture-like structure -- the kind found in industrial surface inspection, material classification, or other structured imaging domains -- even without any domain-specific tuning, and it is this regime, not general object recognition, that the method is proposed for.
 
 The ten-seed real-world evaluation (Sec.~\ref{sec:realworld}) refines this paper's texture-domain narrative: 2D-ROCKET wins significantly on NEU and DTD and loses significantly, by a smaller margin, on Chest X-Ray Pneumonia. Two factors appear to drive this, compounding on DTD: (i) \emph{texture-likeness} -- NEU and DTD favor 2D-ROCKET's flat statistics, while Chest X-Ray's localized opacities favor the CNN's spatially adaptive filters; and (ii) \emph{sample scarcity without augmentation} -- DTD's $\sim$96 images/class push the from-scratch CNN toward memorization (Fig.~\ref{fig:dtd-overfit}), while 2D-ROCKET's linear Ridge fit over fixed features is harder to overfit. NEU's $\sim$240 images/class is not a low-data regime in this sense (CNN mean 92.5\%), so its win is attributable to factor (i) alone, while DTD's larger margin (16.6 vs.\ NEU's 3.0 points) reflects both factors together. This predicts that restoring positional resolution should narrow the Chest X-Ray gap specifically. Sec.~\ref{sec:lspv} confirms it: adding LSPV drops the CNN's advantage from significant ($p=4.6\times10^{-7}$) to indistinguishable ($p=0.22$), and a capacity-matched control attributes only about a quarter of that gain to added feature count, the rest to positional resolution.
 
 Sec.~\ref{sec:sar} provides a third, independent test in a different data modality (raw 1D SAR time series), chosen to probe factor (ii) in isolation: with only 216 examples, sample scarcity alone would predict a 1D-ROCKET win. It does not win -- a CNN wins there too ($p=1.7\times10^{-3}$) -- because the target is a localized energy anomaly (Fig.~\ref{fig:sar-signal}), the same category as Chest X-Ray's opacities, not a texture. Low data alone is therefore not sufficient for a ROCKET-family advantage without factor (i) also holding. Three of the four factor combinations have now been observed directly -- texture/adequate-data (NEU), texture/scarce-data (DTD), non-texture/scarce-data (SAR) -- with non-texture/adequate-data (Chest X-Ray) as the fourth, a small but genuine $2\times2$ probe of the hypothesis.
 
-Limitations: single-seed evaluation for the MNIST/CIFAR-10/KTH-TIPS ablation chain (small effect sizes, especially on near-saturated MNIST, warrant caution without replication); a Ridge regularization strength ($\alpha=1200$) tuned once on MNIST/CIFAR-10-scale data and never re-tuned for the smaller real-world training sets or the 70,000-dimensional LSPV feature space; deliberately simple baselines throughout; and growing memory/conditioning pressure as feature dimensionality reaches the tens of thousands. The paired $t$-tests in Sec.~\ref{sec:realworld} assume rather than verify normality at $n=10$, and since the train/test split is reseeded jointly with model initialization, seed-to-seed variance conflates model-fitting and test-set-composition variability.
+Limitations: single-seed evaluation for the MNIST/CIFAR-10/KTH-TIPS ablation chain (small effect sizes, especially on near-saturated MNIST, warrant caution without replication); a Ridge regularization strength ($\alpha=1200$) tuned once on MNIST/CIFAR-10-scale data and never re-tuned for the smaller real-world training sets or the 70,000-dimensional LSPV feature space; deliberately simple baselines throughout; and growing memory/conditioning pressure as feature dimensionality reaches the tens of thousands. The paired $t$-tests in Sec.~\ref{sec:realworld} assume rather than verify normality at $n=10$, and since the train/test split is reseeded jointly with model initialization, seed-to-seed variance conflates model-fitting and test-set-composition variability. All timings in this paper are aggregate pipeline totals (data loading, training/feature extraction, evaluation); no per-sample inference latency is measured, so deployment-time throughput -- where ROCKET's fixed convolutional bank and CNN's learned filters may scale differently under batching -- remains untested. NEU, DTD, and Chest X-Ray are curated academic benchmarks with balanced or near-balanced classes and clean labels; none of the class imbalance, label noise, or domain shift (e.g., different imaging hardware or acquisition protocols) expected in a deployed setting is represented, and the reported accuracies should not be read as deployment-ready performance estimates.
 
 \section{Conclusion}\label{sec:conclusion}
 

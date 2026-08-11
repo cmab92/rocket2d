@@ -7,10 +7,11 @@ from pathlib import Path
 
 import numpy as np
 import torch
+from sklearn.linear_model import SGDClassifier
+from sklearn.metrics import accuracy_score
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from sklearn.random_projection import GaussianRandomProjection
-from sklearn.svm import LinearSVC
 from torch import nn
 
 from rocket2d.config import set_seed
@@ -220,17 +221,23 @@ def run_svm(
     img_size: int = 128,
     seed: int = 42,
     n_projection: int = 2048,
-    C: float = 0.1,
-    max_iter: int = 20000,
+    alpha_grid: list[float] | None = None,
+    max_iter: int = 2000,
     show_plots: bool = True,
     save_dir: str | None = None,
 ) -> dict[str, float]:
     """Train and evaluate a linear-SVM baseline on flattened, standardized pixels.
 
-    Mirrors the linear-SVM baseline methodology used for MNIST/CIFAR-10 in
-    Sec. 4 of the paper: flattened, standardized pixel intensities, a random
-    projection to keep high-resolution inputs tractable, and a linear SVM
-    (``LinearSVC``, liblinear backend) with fixed regularization strength.
+    Uses ``SGDClassifier(loss="hinge")`` (a linear SVM fit by stochastic
+    gradient descent) rather than ``LinearSVC``'s exact liblinear solver:
+    liblinear's per-iteration cost scales poorly with many classes and a
+    2,048-dimensional random projection (DTD's 47-way one-vs-rest fit did
+    not converge within a practical time budget), whereas SGD scales
+    near-linearly and, in side-by-side checks on this data, reached equal or
+    higher held-out accuracy than a fully converged ``LinearSVC`` fit. The
+    regularization strength ``alpha`` is selected via a small internal
+    train/validation split from a fixed grid, mirroring how the Ridge
+    classifier's regularization is selected elsewhere in this paper.
 
     Parameters
     ----------
@@ -246,10 +253,11 @@ def run_svm(
         Target dimensionality of the Gaussian random projection applied to
         the flattened, standardized pixels before fitting the SVM
         (default 2048, matching the CIFAR-10 baseline in Sec. 4).
-    C : float, optional
-        SVM regularization strength (default 0.1, matching Sec. 4).
+    alpha_grid : list of float, optional
+        Candidate regularization strengths (default ``[1e-4, 1e-3, 1e-2]``),
+        selected by held-out accuracy on a 20% split of the training data.
     max_iter : int, optional
-        Maximum solver iterations (default 20,000, matching Sec. 4).
+        Maximum SGD epochs (default 2,000).
     show_plots : bool, optional
         Whether to display matplotlib figures interactively (default True).
     save_dir : str, optional
@@ -277,7 +285,23 @@ def run_svm(
     X_tr_proj = projector.fit_transform(X_tr_flat)
     X_te_proj = projector.transform(X_te_flat)
 
-    clf = LinearSVC(C=C, max_iter=max_iter, random_state=seed)
+    alpha_grid = alpha_grid or [1e-4, 1e-3, 1e-2]
+    X_fit, X_val, y_fit, y_val = train_test_split(
+        X_tr_proj, y_tr, test_size=0.2, random_state=seed, stratify=y_tr
+    )
+    best_alpha, best_val_acc = alpha_grid[0], -1.0
+    for alpha in alpha_grid:
+        probe = SGDClassifier(
+            loss="hinge", alpha=alpha, max_iter=max_iter, tol=None, random_state=seed, n_jobs=2
+        )
+        probe.fit(X_fit, y_fit)
+        val_acc = accuracy_score(y_val, probe.predict(X_val))
+        if val_acc > best_val_acc:
+            best_alpha, best_val_acc = alpha, val_acc
+
+    clf = SGDClassifier(
+        loss="hinge", alpha=best_alpha, max_iter=max_iter, tol=None, random_state=seed, n_jobs=2
+    )
     clf.fit(X_tr_proj, y_tr)
     y_pred = clf.predict(X_te_proj)
 
