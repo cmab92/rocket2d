@@ -16,7 +16,7 @@ KernelTensors = dict[tuple[int, int], tuple[torch.Tensor, torch.Tensor]]
 DEFAULT_FEATURE_TYPES = ["ppv", "max", "mpv", "mipv_y", "mipv_x"]
 DEFAULT_K_CHOICES = [3, 5, 7, 9]
 DEFAULT_D_CHOICES = [1, 2]
-_MASK_FEATURES = ("ppv", "mpv", "mipv_y", "mipv_x")
+_MASK_FEATURES = ("ppv", "mpv", "mipv_y", "mipv_x", "lspv")
 _POS_COUNT_FEATURES = ("mpv", "mipv_y", "mipv_x")
 
 
@@ -38,6 +38,7 @@ class RocketClassifier:
         seed: int = 42,
         batch_size: int = 128,
         device: str | None = None,
+        lspv_grid: int = 3,
     ) -> None:
         """Initialize a RocketClassifier instance.
 
@@ -59,6 +60,12 @@ class RocketClassifier:
             Batch size used when computing features.
         device : str, optional
             Torch device for feature extraction (default: CUDA if available, else CPU).
+        lspv_grid : int
+            Grid resolution for the Local Share of Positive Values (LSPV) feature,
+            if ``"lspv"`` is included in ``feature_types``: the kernel's activation
+            map is adaptively pooled into an ``lspv_grid x lspv_grid`` grid of
+            regional PPV values, giving each kernel coarse positional resolution
+            instead of a single global statistic (default 3, i.e. 9 regions).
         """
         self.n_kernels = n_kernels
         self.k_choices = k_choices or list(DEFAULT_K_CHOICES)
@@ -68,6 +75,7 @@ class RocketClassifier:
         self.seed = seed
         self.batch_size = batch_size
         self.device = device or default_device()
+        self.lspv_grid = lspv_grid
         self.kernels_by_group: KernelGroup | None = None
         self.clf = RidgeClassifier(alpha=self.alpha)
         self.is_fitted = False
@@ -208,6 +216,11 @@ class RocketClassifier:
                         feats.append(mipv_y)
                     if "mipv_x" in feature_types:
                         feats.append(mipv_x)
+                if "lspv" in feature_types:
+                    assert mask is not None
+                    grid = min(self.lspv_grid, out.shape[2], out.shape[3])
+                    lspv = F.adaptive_avg_pool2d(mask, output_size=(grid, grid))
+                    feats.append(lspv.flatten(start_dim=1))
                 group_features.append(torch.cat(feats, dim=1))
             return torch.cat(group_features, dim=1).cpu().numpy()
 

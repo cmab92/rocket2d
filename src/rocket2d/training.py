@@ -149,6 +149,8 @@ def run_rocket(
     device: str | None = None,
     show_plots: bool = True,
     save_dir: str | None = None,
+    feature_types: list[str] | None = None,
+    lspv_grid: int = 3,
 ) -> dict[str, float]:
     """Train and evaluate a :class:`RocketClassifier` pipeline on a given dataset.
 
@@ -182,7 +184,10 @@ def run_rocket(
     X, y = dataset.prepare()
     X_tr, X_te, y_tr, y_te = train_test_split(X, y, test_size=0.2, random_state=seed, stratify=y)
 
-    model = RocketClassifier(n_kernels=n_kernels, seed=seed, device=device)
+    model = RocketClassifier(
+        n_kernels=n_kernels, seed=seed, device=device,
+        feature_types=feature_types, lspv_grid=lspv_grid,
+    )
     model.fit(X_tr, y_tr)
     y_pred = model.predict(X_te)
 
