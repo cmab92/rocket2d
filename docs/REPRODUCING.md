@@ -8,7 +8,8 @@ reproduced from this repository at all.
 
 **Reproducible from this repository:** Sec. 5.4 (Real-world validation: NEU,
 Chest X-Ray, DTD), Sec. 5.5 (LSPV) and the capacity-control experiment
-referenced there — everything built on the `rocket2d` package under `src/`.
+referenced there, and Sec. 5.6 (SAR RFI detection) — everything built on the
+`rocket2d` package under `src/`.
 
 **Not reproducible from this repository:** Table 1 and Sec. 5.1–5.3 (the
 MNIST/CIFAR-10/1D-vs-2D/padding/preprocessing/kernel-count ablations and the
@@ -78,6 +79,15 @@ Notes:
   editing the hardcoded arrays in `scripts/plot_confusion_figures.py` if you
   change the seed) via `python scripts/plot_confusion_figures.py`, which
   writes to `docs/figures/`.
+- The linear-SVM row in Table 2 is produced by `scripts/run_svm_multiseed.py`
+  (`run_svm` in `src/rocket2d/training.py`: flattened, standardized pixels,
+  Gaussian random projection to 2,048 dims, `LinearSVC`, `C=0.1`,
+  `max_iter=20000` — the same methodology used for MNIST/CIFAR-10 in Table 1).
+  NEU converges in ~5-6 min total for 10 seeds; DTD's 47-class one-vs-rest
+  fit is dramatically slower (each seed took well over 30 minutes on this
+  repo's dev machine, still running at time of writing) — budget accordingly
+  and do not assume this baseline is cheap just because SVM lost badly in
+  Table 1.
 
 ## 4. Table 3 — LSPV (Sec. 5.5)
 
@@ -113,7 +123,66 @@ started swapping the machine) on Chest X-Ray, 5 seeds (42–46),
 on a 60GB machine). Compare its accuracy distribution against both the
 original 5,000-kernel ROCKET (no LSPV) and the LSPV run above.
 
-## 6. Building the PDF
+## 6. Table 4 — SAR RFI detection (Sec. 5.6)
+
+This section uses real, third-party data (RFInject-v1-L0, an ESA Φ-lab
+Hugging Face bucket of Sentinel-1 Level-0 raw bursts with simulated RFI) and
+package dependencies not required anywhere else in this repository.
+
+```bash
+git clone https://github.com/sirbastiano/rfinject-utils.git /tmp/rfinject-utils
+pip install zarr huggingface-hub folium pandas
+pip install -e /tmp/rfinject-utils --no-deps
+```
+
+Download one small burst (~14MB; the bucket also contains a single monolithic
+411GB mirror at `RFInject/v1` on Hugging Face — do not use that, use the
+bucket-native selective access below instead):
+
+```python
+from rfinject import DEFAULT_HF_BUCKET_ID, download_hf_bucket_path
+download_hf_bucket_path(
+    DEFAULT_HF_BUCKET_ID,
+    "s1a-iw-raw-s-vh-20190610t052901-20190610t052933-027613-031dc6.zarr/burst_36",
+    "data/rfinject",
+)
+```
+
+Then run:
+
+```bash
+python scripts/run_sar_rfi_experiment.py   # 10 seeds, ~3 min total
+python -m scripts.plot_sar_figures         # Figs. 6-7
+```
+
+Important, hard-won details:
+- **Interference is sparse across azimuth lines, not just range samples.**
+  Most of the burst's 15 interference realizations inject energy into only a
+  handful of its 102 lines each, not all of them. `build_dataset()` in
+  `scripts/run_sar_rfi_experiment.py` only labels a `(line, realization)` pair
+  as contaminated if it actually contains non-zero injected energy (114 such
+  pairs in this burst) — an earlier version paired every line with a randomly
+  chosen realization regardless, which mislabeled ~90% of the "contaminated"
+  class and produced classifiers that scored *below chance* despite correctly
+  learning the real signal (see Sec. 5.6 for the full account; verify this
+  isn't silently reintroduced if you modify the pairing logic, e.g. by
+  checking that `(y_true == y_pred).mean() + (y_true == (1 - y_pred)).mean()
+  == 1.0` and that the former, not the latter, is the larger of the two).
+- `rfi[k]` is the interference-only array (additive model); a contaminated
+  signal is `echo + rfi[k]`, not `rfi[k]` alone.
+- The genuine 1D-ROCKET implementation lives in
+  `src/rocket2d/models/rocket1d.py` (kernel lengths `{7,9,11}`, dilations
+  `{1,2,4}`, random same/valid padding per kernel, PPV+Max, grouped/batched
+  `conv1d` calls for tractable runtime at thousands of kernels) — this is a
+  fresh implementation, not a reuse of the 2D `RocketClassifier`, since PyTorch
+  `conv2d` kernels in that class are always square and cannot represent a
+  length-only 1D kernel without reshaping hacks.
+- The dataset itself (216 examples: 102 clean + 114 genuinely contaminated) is
+  fixed; only the seed on `main()`'s per-seed loop is used to vary the
+  train/test split and model initialization, matching the split-varies-not-
+  the-data protocol used for Table 2/3.
+
+## 7. Building the PDF
 
 ```bash
 cd docs
@@ -127,7 +196,7 @@ successful build, `docs/paper.pdf` is a checked-in convenience copy of
 remember to `cp docs/build/paper.pdf docs/paper.pdf` before committing if
 you rebuild it.
 
-## 7. Tests
+## 8. Tests
 
 ```bash
 pytest            # synthetic-image fixtures, no dataset download needed

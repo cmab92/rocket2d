@@ -8,6 +8,9 @@ from pathlib import Path
 import numpy as np
 import torch
 from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from sklearn.random_projection import GaussianRandomProjection
+from sklearn.svm import LinearSVC
 from torch import nn
 
 from rocket2d.config import set_seed
@@ -195,6 +198,93 @@ def run_rocket(
         Path(save_dir).mkdir(parents=True, exist_ok=True)
 
     print(f"\n--- ROCKET Evaluation for {dataset_name.upper()} ---")
+    metrics = evaluate_metrics(
+        y_true=y_te,
+        y_pred=y_pred,
+        labels=list(range(len(set(y)))),
+        target_names=list(dataset.class_to_idx.keys()),
+        X_sample=X_te,
+        show_confusion=True,
+        show_misclassified=True,
+        max_misclassified=5,
+        show=show_plots,
+        save_dir=save_dir,
+    )
+    print("-" * 60)
+    return metrics
+
+
+def run_svm(
+    dataset_name: str,
+    root: str,
+    img_size: int = 128,
+    seed: int = 42,
+    n_projection: int = 2048,
+    C: float = 0.1,
+    max_iter: int = 20000,
+    show_plots: bool = True,
+    save_dir: str | None = None,
+) -> dict[str, float]:
+    """Train and evaluate a linear-SVM baseline on flattened, standardized pixels.
+
+    Mirrors the linear-SVM baseline methodology used for MNIST/CIFAR-10 in
+    Sec. 4 of the paper: flattened, standardized pixel intensities, a random
+    projection to keep high-resolution inputs tractable, and a linear SVM
+    (``LinearSVC``, liblinear backend) with fixed regularization strength.
+
+    Parameters
+    ----------
+    dataset_name : str
+        Dataset key (``"neu"``, ``"xray"``, or ``"dtd"``).
+    root : str
+        Path to the dataset root directory.
+    img_size : int, optional
+        Image resize target (default 128).
+    seed : int, optional
+        Random seed (default 42).
+    n_projection : int, optional
+        Target dimensionality of the Gaussian random projection applied to
+        the flattened, standardized pixels before fitting the SVM
+        (default 2048, matching the CIFAR-10 baseline in Sec. 4).
+    C : float, optional
+        SVM regularization strength (default 0.1, matching Sec. 4).
+    max_iter : int, optional
+        Maximum solver iterations (default 20,000, matching Sec. 4).
+    show_plots : bool, optional
+        Whether to display matplotlib figures interactively (default True).
+    save_dir : str, optional
+        If given, save generated plots (confusion matrix, misclassified
+        examples) to this directory.
+
+    Returns
+    -------
+    dict
+        Evaluation metrics returned by :func:`evaluate_metrics`.
+    """
+    set_seed(seed)
+    dataset = ImageDataset(root=root, dataset=dataset_name, size=img_size, grayscale=True)
+    X, y = dataset.prepare()
+    X_tr, X_te, y_tr, y_te = train_test_split(X, y, test_size=0.2, random_state=seed, stratify=y)
+
+    X_tr_flat = X_tr.reshape(X_tr.shape[0], -1).astype("float32")
+    X_te_flat = X_te.reshape(X_te.shape[0], -1).astype("float32")
+
+    scaler = StandardScaler()
+    X_tr_flat = scaler.fit_transform(X_tr_flat)
+    X_te_flat = scaler.transform(X_te_flat)
+
+    projector = GaussianRandomProjection(n_components=n_projection, random_state=seed)
+    X_tr_proj = projector.fit_transform(X_tr_flat)
+    X_te_proj = projector.transform(X_te_flat)
+
+    clf = LinearSVC(C=C, max_iter=max_iter, random_state=seed)
+    clf.fit(X_tr_proj, y_tr)
+    y_pred = clf.predict(X_te_proj)
+
+    if save_dir:
+        Path(save_dir).mkdir(parents=True, exist_ok=True)
+
+    print(f"\n--- SVM Evaluation for {dataset_name.upper()} ---")
     metrics = evaluate_metrics(
         y_true=y_te,
         y_pred=y_pred,
